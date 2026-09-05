@@ -4,8 +4,9 @@ import { useAuthStore } from '../../stores/authStore';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card, CardContent } from '../../components/ui/Card';
-import { Sparkles, AlertCircle, ArrowRight } from 'lucide-react';
+import { AlertCircle, ArrowRight } from 'lucide-react';
 import { api } from '../../api/client';
+import { LogoIcon } from '../../components/ui/Logo';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -27,7 +28,7 @@ export const LoginPage: React.FC = () => {
       localStorage.removeItem('pending_invite_token');
       navigate(pendingInvite ? `/invitations/${pendingInvite}` : '/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Invalid email or password');
+      setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setSubmitting(false);
     }
@@ -35,7 +36,7 @@ export const LoginPage: React.FC = () => {
 
   const handleGoogleLogin = async () => {
     try {
-      const response = await api.get('/auth/google');
+      const response = await api.get('/auth/google/redirect');
       if (response.data?.data?.url) {
         window.location.href = response.data.data.url;
       }
@@ -49,8 +50,8 @@ export const LoginPage: React.FC = () => {
       <div className="w-full max-w-md space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="inline-flex w-12 h-12 rounded-2xl bg-primary text-white items-center justify-center shadow-md mb-2">
-            <Sparkles className="w-6 h-6" />
+          <div className="flex justify-center mb-3">
+            <LogoIcon className="w-14 h-14 hover:scale-105 transition-transform" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-text">Welcome to NaTask</h1>
           <p className="text-sm text-muted">Sign in to your team workspace to continue</p>

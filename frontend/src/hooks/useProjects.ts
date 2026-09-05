@@ -88,9 +88,23 @@ export const useAddProjectMember = () => {
 
 export const useCreateProjectInvitation = () => {
   return useMutation({
-    mutationFn: async ({ projectId, role }: { projectId: number; role: 'admin' | 'member' | 'viewer' }) => {
-      const response = await api.post(`/projects/${projectId}/invitations`, { role });
-      return response.data.data as { id: number; role: string; expires_at: string; url: string };
+    mutationFn: async ({
+      projectId,
+      role,
+      expires_in = '10m',
+    }: {
+      projectId: number;
+      role: 'admin' | 'member' | 'viewer';
+      expires_in?: '5m' | '10m' | '15m' | 'never';
+    }) => {
+      const response = await api.post(`/projects/${projectId}/invitations`, { role, expires_in });
+      return response.data.data as {
+        id: number;
+        role: string;
+        expires_at: string | null;
+        expires_in_seconds: number | null;
+        url: string;
+      };
     },
   });
 };

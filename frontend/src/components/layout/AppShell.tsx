@@ -11,13 +11,13 @@ import {
   X,
   ChevronDown,
   ChevronRight,
-  Sparkles
-  , Settings
+  Settings
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useProjects } from '../../hooks/useProjects';
 import { Avatar } from '../ui/Avatar';
+import { Logo, LogoIcon } from '../ui/Logo';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -45,10 +45,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
       {/* Mobile Topbar */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 bg-surface border-b border-border z-20 shrink-0">
         <Link to="/dashboard" className="flex items-center gap-2 font-bold text-base tracking-tight">
-          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-white">
-            <Sparkles className="w-3.5 h-3.5" />
-          </div>
-          <span className="text-text">NaTask</span>
+          <Logo size="sm" />
         </Link>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -72,14 +69,14 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         <div className="px-4 py-4 border-b border-border">
           <Link
             to="/dashboard"
-            className="flex items-center gap-2.5 font-bold text-base tracking-tight"
+            className="flex items-center gap-2.5 font-bold text-base tracking-tight group"
             onClick={() => setMobileMenuOpen(false)}
           >
-            <div className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center shadow-sm shrink-0">
-              <Sparkles className="w-4 h-4" />
-            </div>
+            <LogoIcon className="w-8 h-8 group-hover:scale-105 transition-transform" />
             <div>
-              <span className="text-text block leading-tight">NaTask</span>
+              <span className="text-text block leading-tight font-black">
+                Na<span className="text-primary">Task</span>
+              </span>
               <span className="text-[10px] font-mono text-muted uppercase tracking-wider leading-tight">Workspace</span>
             </div>
           </Link>

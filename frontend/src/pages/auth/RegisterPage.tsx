@@ -4,7 +4,8 @@ import { useAuthStore } from '../../stores/authStore';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card, CardContent } from '../../components/ui/Card';
-import { Sparkles, AlertCircle, ArrowRight } from 'lucide-react';
+import { AlertCircle, ArrowRight } from 'lucide-react';
+import { LogoIcon } from '../../components/ui/Logo';
 
 export const RegisterPage: React.FC = () => {
   const [name, setName] = useState('');
@@ -53,8 +54,8 @@ export const RegisterPage: React.FC = () => {
     <div className="min-h-screen bg-background flex flex-col justify-center items-center p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
-          <div className="inline-flex w-12 h-12 rounded-2xl bg-primary text-white items-center justify-center shadow-md mb-2">
-            <Sparkles className="w-6 h-6" />
+          <div className="flex justify-center mb-3">
+            <LogoIcon className="w-14 h-14 hover:scale-105 transition-transform" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-text">Create your account</h1>
           <p className="text-sm text-muted">Join NaTask to manage your tasks effortlessly</p>

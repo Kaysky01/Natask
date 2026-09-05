@@ -302,7 +302,7 @@ class ProjectController extends Controller
     }
 
     /**
-     * Create a shareable invitation link for the project (expires in 10 minutes).
+     * Create a shareable invitation link for the project with configurable expiration (5m, 10m, 15m, never).
      */
     public function createInvitation(Request $request, Project $project): JsonResponse
     {
@@ -313,6 +313,7 @@ class ProjectController extends Controller
 
         $validator = Validator::make($request->all(), [
             'role' => 'required|in:' . implode(',', $allowedRoles),
+            'expires_in' => 'nullable|in:5m,10m,15m,never,5,10,15,0',
         ]);
 
         if ($validator->fails()) {
@@ -329,7 +330,25 @@ class ProjectController extends Controller
             ->delete();
 
         $token = Str::random(64);
-        $expiresAt = now()->addMinutes(10);
+        
+        $duration = (string) ($request->input('expires_in', '10m'));
+        $expiresAt = null;
+        $expiresInSeconds = null;
+
+        if ($duration === '5m' || $duration === '5') {
+            $expiresAt = now()->addMinutes(5);
+            $expiresInSeconds = 300;
+        } elseif ($duration === '15m' || $duration === '15') {
+            $expiresAt = now()->addMinutes(15);
+            $expiresInSeconds = 900;
+        } elseif ($duration === 'never' || $duration === '0') {
+            $expiresAt = null;
+            $expiresInSeconds = null;
+        } else {
+            // Default 10 minutes
+            $expiresAt = now()->addMinutes(10);
+            $expiresInSeconds = 600;
+        }
 
         $invitation = ProjectInvitation::create([
             'project_id' => $project->id,
@@ -339,14 +358,18 @@ class ProjectController extends Controller
             'expires_at' => $expiresAt,
         ]);
 
+        $message = $expiresAt 
+            ? 'Link undangan berhasil dibuat (berlaku ' . ($expiresInSeconds / 60) . ' menit)'
+            : 'Link undangan berhasil dibuat (tanpa batas waktu)';
+
         return response()->json([
             'success' => true,
-            'message' => 'Link undangan berhasil dibuat (berlaku 10 menit)',
+            'message' => $message,
             'data' => [
                 'id' => $invitation->id,
                 'role' => $invitation->role,
                 'expires_at' => $invitation->expires_at,
-                'expires_in_seconds' => 600,
+                'expires_in_seconds' => $expiresInSeconds,
                 'url' => rtrim(config('app.frontend_url', 'http://localhost:5173'), '/') . '/invitations/' . $token,
             ],
         ], 201);
@@ -360,13 +383,16 @@ class ProjectController extends Controller
         $tokenHash = hash('sha256', $token);
         $invitation = ProjectInvitation::with(['project.owner:id,name,email,avatar', 'inviter:id,name,email,avatar'])
             ->where('token_hash', $tokenHash)
-            ->where('expires_at', '>', now())
+            ->where(function ($query) {
+                $query->whereNull('expires_at')
+                      ->orWhere('expires_at', '>', now());
+            })
             ->first();
 
         if (!$invitation || !$invitation->project) {
             return response()->json([
                 'success' => false,
-                'message' => 'Link undangan tidak valid atau sudah kadaluarsa (berlaku 10 menit). Silakan minta link baru.',
+                'message' => 'Link undangan tidak valid atau sudah kadaluarsa. Silakan minta link baru.',
             ], 404);
         }
 
@@ -394,13 +420,16 @@ class ProjectController extends Controller
         $tokenHash = hash('sha256', $token);
         $invitation = ProjectInvitation::with('project')
             ->where('token_hash', $tokenHash)
-            ->where('expires_at', '>', now())
+            ->where(function ($query) {
+                $query->whereNull('expires_at')
+                      ->orWhere('expires_at', '>', now());
+            })
             ->first();
 
         if (!$invitation || !$invitation->project) {
             return response()->json([
                 'success' => false,
-                'message' => 'Link undangan tidak valid atau sudah kadaluarsa (berlaku 10 menit). Silakan minta link baru.',
+                'message' => 'Link undangan tidak valid atau sudah kadaluarsa. Silakan minta link baru.',
             ], 404);
         }
 

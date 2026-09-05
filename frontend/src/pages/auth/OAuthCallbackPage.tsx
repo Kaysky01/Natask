@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
-import { Sparkles } from 'lucide-react';
+import { LogoIcon } from '../../components/ui/Logo';
 
 export const OAuthCallbackPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -26,8 +26,8 @@ export const OAuthCallbackPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <div className="text-center space-y-3">
-        <div className="w-12 h-12 rounded-2xl bg-primary text-white flex items-center justify-center mx-auto animate-pulse">
-          <Sparkles className="w-6 h-6" />
+        <div className="flex justify-center mx-auto animate-pulse">
+          <LogoIcon className="w-14 h-14" />
         </div>
         <h2 className="text-lg font-semibold text-text">Signing you into NaTask...</h2>
         <p className="text-sm text-muted">Please wait while we verify your session.</p>

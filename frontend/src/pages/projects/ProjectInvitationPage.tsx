@@ -76,7 +76,7 @@ export const ProjectInvitationPage: React.FC = () => {
 
   const errorMessage = acceptInvitation.error
     ? handleApiError(acceptInvitation.error)
-    : 'Link undangan ini mungkin sudah kadaluarsa (berlaku 10 menit), sudah digunakan, atau tidak valid.';
+    : 'Link undangan ini mungkin sudah kadaluarsa, sudah digunakan, atau tidak valid.';
 
   return (
     <InvitationShell>

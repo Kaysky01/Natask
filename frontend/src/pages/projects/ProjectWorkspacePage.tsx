@@ -12,6 +12,7 @@ import {
   Copy,
   Clock,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import { useProject, useRemoveProjectMember, useDeleteProject, useCreateProjectInvitation, useUpdateProjectMemberRole } from '../../hooks/useProjects';
 import { useUpdateTaskStatus } from '../../hooks/useTasks';
@@ -36,9 +37,10 @@ export const ProjectWorkspacePage: React.FC = () => {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteRole, setInviteRole] = useState<'admin' | 'member' | 'viewer'>('member');
+  const [inviteDuration, setInviteDuration] = useState<'5m' | '10m' | '15m' | 'never'>('10m');
   const [inviteLink, setInviteLink] = useState('');
   const [inviteExpiresAt, setInviteExpiresAt] = useState<Date | null>(null);
-  const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<number | null>(null);
   const [pendingMemberRoles, setPendingMemberRoles] = useState<Record<number, 'admin' | 'member' | 'viewer'>>({});
   const [isDeleteProjectOpen, setIsDeleteProjectOpen] = useState(false);
@@ -55,9 +57,12 @@ export const ProjectWorkspacePage: React.FC = () => {
   const deleteProject = useDeleteProject();
   const updateTaskStatus = useUpdateTaskStatus();
 
-  // 10-minute invitation countdown timer
+  // Invitation countdown timer
   React.useEffect(() => {
-    if (!inviteExpiresAt) return;
+    if (!inviteExpiresAt) {
+      setTimeLeft(null);
+      return;
+    }
     const updateCountdown = () => {
       const remaining = Math.max(0, Math.floor((inviteExpiresAt.getTime() - Date.now()) / 1000));
       setTimeLeft(remaining);
@@ -104,12 +109,20 @@ export const ProjectWorkspacePage: React.FC = () => {
       const invitation = await createInvitation.mutateAsync({
         projectId: project.id,
         role: inviteRole,
+        expires_in: inviteDuration,
       });
       setInviteLink(invitation.url);
-      const expDate = new Date(invitation.expires_at);
-      setInviteExpiresAt(expDate);
-      setTimeLeft(Math.max(0, Math.floor((expDate.getTime() - Date.now()) / 1000)));
-      success('Link undangan baru (berlaku 10 menit) berhasil dibuat.', 'Link Siap');
+      if (invitation.expires_at) {
+        const expDate = new Date(invitation.expires_at);
+        setInviteExpiresAt(expDate);
+        setTimeLeft(Math.max(0, Math.floor((expDate.getTime() - Date.now()) / 1000)));
+        const durationText = inviteDuration === '5m' ? '5 menit' : inviteDuration === '15m' ? '15 menit' : '10 menit';
+        success(`Link undangan (${durationText}) berhasil dibuat.`, 'Link Siap');
+      } else {
+        setInviteExpiresAt(null);
+        setTimeLeft(null);
+        success('Link undangan tanpa batas waktu berhasil dibuat.', 'Link Siap');
+      }
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Gagal membuat link undangan';
       toastError(msg, 'Gagal');
@@ -527,38 +540,67 @@ export const ProjectWorkspacePage: React.FC = () => {
                 <UserPlus className="w-4 h-4 text-primary" />
                 Undang Anggota Tim
               </h2>
-              <span className="text-[11px] font-medium text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
-                <Clock className="w-3 h-3" /> Berlaku 10 Menit
+              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                inviteDuration === 'never'
+                  ? 'text-primary bg-primary/10'
+                  : 'text-amber-500 bg-amber-500/10'
+              }`}>
+                <Clock className="w-3 h-3" />
+                {inviteDuration === 'never' ? 'Tanpa Kadaluarsa' : `${inviteDuration === '5m' ? '5' : inviteDuration === '15m' ? '15' : '10'} Menit`}
               </span>
             </div>
 
             <p className="text-xs text-muted">
-              Link undangan berlaku selama <strong>10 menit</strong> demi keamanan. Anda dapat membuat ulang link kapan saja jika telah kadaluarsa.
+              Pilih batas waktu link undangan sesuai kebutuhan keamanan. Link dapat di-generate ulang kapan saja.
             </p>
 
             <form onSubmit={handleInvite} className="space-y-3.5">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-text">Role Akses</label>
-                <select
-                  className="w-full text-xs bg-background border border-border rounded-xl p-2.5 text-text"
-                  value={inviteRole}
-                  onChange={(e) => {
-                    setInviteRole(e.target.value as any);
-                    setInviteLink('');
-                    setInviteExpiresAt(null);
-                  }}
-                >
-                  {isOwner && <option value="admin">Admin</option>}
-                  <option value="member">Member</option>
-                  <option value="viewer">Viewer</option>
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-text">Role Akses</label>
+                  <select
+                    className="w-full text-xs bg-background border border-border rounded-xl p-2.5 text-text"
+                    value={inviteRole}
+                    onChange={(e) => {
+                      setInviteRole(e.target.value as any);
+                      setInviteLink('');
+                      setInviteExpiresAt(null);
+                    }}
+                  >
+                    {isOwner && <option value="admin">Admin</option>}
+                    <option value="member">Member</option>
+                    <option value="viewer">Viewer</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-text">Masa Berlaku</label>
+                  <select
+                    className="w-full text-xs bg-background border border-border rounded-xl p-2.5 text-text"
+                    value={inviteDuration}
+                    onChange={(e) => {
+                      setInviteDuration(e.target.value as any);
+                      setInviteLink('');
+                      setInviteExpiresAt(null);
+                    }}
+                  >
+                    <option value="5m">5 Menit</option>
+                    <option value="10m">10 Menit (Standar)</option>
+                    <option value="15m">15 Menit</option>
+                    <option value="never">Tanpa Kadaluarsa</option>
+                  </select>
+                </div>
               </div>
 
               {inviteLink ? (
                 <div className="space-y-2.5 pt-1">
                   <div className="flex items-center justify-between text-[11px] bg-background/50 border border-border rounded-lg p-2">
                     <span className="text-muted">Status Link:</span>
-                    {timeLeft > 0 ? (
+                    {inviteExpiresAt === null ? (
+                      <span className="font-semibold text-primary flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" /> Aktif Selamanya (Tanpa Batas Waktu)
+                      </span>
+                    ) : timeLeft !== null && timeLeft > 0 ? (
                       <span className="font-semibold text-emerald-500 flex items-center gap-1">
                         <Clock className="w-3 h-3" /> Aktif ({formatTimeLeft(timeLeft)})
                       </span>
@@ -580,7 +622,7 @@ export const ProjectWorkspacePage: React.FC = () => {
                       variant="secondary"
                       size="sm"
                       onClick={handleCopyInviteLink}
-                      disabled={timeLeft <= 0}
+                      disabled={inviteExpiresAt !== null && (timeLeft ?? 0) <= 0}
                       title="Salin link undangan"
                     >
                       <Copy className="w-3.5 h-3.5 mr-1" /> Salin
@@ -602,7 +644,7 @@ export const ProjectWorkspacePage: React.FC = () => {
                     </Button>
                     <Button
                       type="button"
-                      variant={timeLeft <= 0 ? 'primary' : 'secondary'}
+                      variant={inviteExpiresAt !== null && (timeLeft ?? 0) <= 0 ? 'primary' : 'secondary'}
                       size="sm"
                       onClick={() => handleInvite()}
                       disabled={createInvitation.isPending}
@@ -628,7 +670,7 @@ export const ProjectWorkspacePage: React.FC = () => {
                     size="sm"
                     disabled={createInvitation.isPending}
                   >
-                    {createInvitation.isPending ? 'Membuat...' : 'Buat Link Undangan (10 Menit)'}
+                    {createInvitation.isPending ? 'Membuat...' : 'Buat Link Undangan'}
                   </Button>
                 </div>
               )}

@@ -549,6 +549,55 @@ class NaTaskApiTest extends TestCase
         $respExpired = $this->actingAs($otherUser, 'sanctum')
             ->postJson("/api/invitations/{$expiredToken}/accept");
         $respExpired->assertStatus(404);
+
+        // 6. Test 'never' expires invitation
+        $respNever = $this->actingAs($owner, 'sanctum')
+            ->postJson("/api/projects/{$project->id}/invitations", [
+                'role' => 'viewer',
+                'expires_in' => 'never',
+            ]);
+        $respNever->assertStatus(201);
+        $respNever->assertJson([
+            'success' => true,
+            'data' => [
+                'role' => 'viewer',
+                'expires_at' => null,
+                'expires_in_seconds' => null,
+            ],
+        ]);
+        $neverToken = basename($respNever->json('data.url'));
+        $respNeverAccept = $this->actingAs($otherUser, 'sanctum')
+            ->postJson("/api/invitations/{$neverToken}/accept");
+        $respNeverAccept->assertStatus(200);
+        $this->assertTrue($project->fresh()->members()->where('user_id', $otherUser->id)->exists());
+
+        // 7. Test '5m' expires invitation
+        $resp5m = $this->actingAs($owner, 'sanctum')
+            ->postJson("/api/projects/{$project->id}/invitations", [
+                'role' => 'member',
+                'expires_in' => '5m',
+            ]);
+        $resp5m->assertStatus(201);
+        $resp5m->assertJson([
+            'success' => true,
+            'data' => [
+                'expires_in_seconds' => 300,
+            ],
+        ]);
+
+        // 8. Test '15m' expires invitation
+        $resp15m = $this->actingAs($owner, 'sanctum')
+            ->postJson("/api/projects/{$project->id}/invitations", [
+                'role' => 'member',
+                'expires_in' => '15m',
+            ]);
+        $resp15m->assertStatus(201);
+        $resp15m->assertJson([
+            'success' => true,
+            'data' => [
+                'expires_in_seconds' => 900,
+            ],
+        ]);
     }
 }
 
