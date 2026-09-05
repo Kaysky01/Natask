@@ -17,6 +17,7 @@ interface AuthState {
   updateProfile: (data: {
     name: string;
     email: string;
+    phone?: string;
     bio?: string;
     timezone: string;
     preferences?: Record<string, unknown>;

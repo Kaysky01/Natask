@@ -13,12 +13,14 @@ import {
   Clock,
   RefreshCw,
   Sparkles,
+  MessageSquare,
 } from 'lucide-react';
 import { useProject, useRemoveProjectMember, useDeleteProject, useCreateProjectInvitation, useUpdateProjectMemberRole } from '../../hooks/useProjects';
 import { useUpdateTaskStatus } from '../../hooks/useTasks';
 import { KanbanBoard } from '../../components/kanban/KanbanBoard';
 import { TaskDetailModal } from '../../components/task/TaskDetailModal';
 import { CreateTaskModal } from '../../components/task/CreateTaskModal';
+import { ProjectFonnteModal } from '../../components/project/ProjectFonnteModal';
 import { Badge } from '../../components/ui/Badge';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
@@ -36,6 +38,7 @@ export const ProjectWorkspacePage: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isFonnteModalOpen, setIsFonnteModalOpen] = useState(false);
   const [inviteRole, setInviteRole] = useState<'admin' | 'member' | 'viewer'>('member');
   const [inviteDuration, setInviteDuration] = useState<'5m' | '10m' | '15m' | 'never'>('10m');
   const [inviteLink, setInviteLink] = useState('');
@@ -270,6 +273,19 @@ export const ProjectWorkspacePage: React.FC = () => {
               >
                 <UserPlus className="w-3.5 h-3.5 mr-1.5" />
                 Invite
+              </Button>
+            )}
+
+            {isOwner && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsFonnteModalOpen(true)}
+                className="text-xs h-8 gap-1.5 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                title="Integrasi WhatsApp (Fonnte) - Khusus Owner"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">WhatsApp Bot</span>
               </Button>
             )}
 
@@ -723,6 +739,14 @@ export const ProjectWorkspacePage: React.FC = () => {
         members={project.members || []}
         projectLabels={projectLabels}
         readOnly={isViewer}
+      />
+
+      {/* WhatsApp (Fonnte) Integration Modal */}
+      <ProjectFonnteModal
+        isOpen={isFonnteModalOpen}
+        onClose={() => setIsFonnteModalOpen(false)}
+        projectId={project.id}
+        projectName={project.name}
       />
     </div>
   );

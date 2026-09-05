@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\ProjectController;
+use App\Http\Controllers\API\ProjectFonnteController;
 use App\Http\Controllers\API\TaskController;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\ActivityController;
@@ -80,6 +81,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('{project}/statuses/{status}', [ProjectController::class, 'updateTaskStatus']);
         Route::delete('{project}/statuses/{status}', [ProjectController::class, 'destroyTaskStatus']);
         Route::post('{project}/setup-defaults', [ProjectController::class, 'setupDefaults']);
+
+        // Project Fonnte WhatsApp integration (Owner only)
+        Route::get('{project}/fonnte', [ProjectFonnteController::class, 'getSettings']);
+        Route::post('{project}/fonnte', [ProjectFonnteController::class, 'updateSettings']);
+        Route::post('{project}/fonnte/check-device', [ProjectFonnteController::class, 'checkDevice']);
+        Route::post('{project}/fonnte/test-send', [ProjectFonnteController::class, 'testSend']);
     });
 
     Route::post('invitations/{token}/accept', [ProjectController::class, 'acceptInvitation']);

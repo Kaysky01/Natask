@@ -294,6 +294,9 @@ class ProjectController extends Controller
         ]);
         ProjectChanged::dispatch($project, 'member.added');
 
+        // Send Fonnte WhatsApp notification
+        app(\App\Services\FonnteNotificationService::class)->notifyMemberJoined($project, $user, $role);
+
         return response()->json([
             'success' => true,
             'message' => 'Member added successfully',
@@ -460,6 +463,9 @@ class ProjectController extends Controller
             ]);
             ProjectChanged::dispatch($project, 'member.joined');
         });
+
+        // Send Fonnte WhatsApp notification
+        app(\App\Services\FonnteNotificationService::class)->notifyMemberJoined($project, $currentUser, $invitation->role);
 
         return response()->json([
             'success' => true,

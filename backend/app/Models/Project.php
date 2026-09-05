@@ -86,6 +86,14 @@ class Project extends Model
     }
 
     /**
+     * Get the Fonnte WhatsApp integration settings for the project.
+     */
+    public function fonnteSetting(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(ProjectFonnteSetting::class);
+    }
+
+    /**
      * Get the tasks in the project.
      */
     public function tasks(): HasMany

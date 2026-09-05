@@ -1,0 +1,370 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Comment;
+use App\Models\Project;
+use App\Models\ProjectFonnteSetting;
+use App\Models\Task;
+use App\Models\TaskStatus;
+use App\Models\User;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+
+class FonnteNotificationService
+{
+    /**
+     * Check Fonnte device connection status & sender number.
+     */
+    public function checkDevice(string $token, ?string $endpoint = null): array
+    {
+        try {
+            // Default device check endpoint
+            $deviceEndpoint = 'https://api.fonnte.com/get-devices';
+            
+            $response = Http::withHeaders([
+                'Authorization' => $token,
+            ])->timeout(8)->post($deviceEndpoint);
+
+            if ($response->successful()) {
+                $json = $response->json();
+                
+                // Parse standard Fonnte device response structure
+                $deviceData = null;
+                if (isset($json['data']) && is_array($json['data'])) {
+                    $deviceData = $json['data'][0] ?? $json['data'];
+                }
+
+                $device = $deviceData['device'] ?? $json['device'] ?? $json['sender'] ?? null;
+                $status = $deviceData['status'] ?? $json['status'] ?? 'connected';
+                $name = $deviceData['name'] ?? $json['name'] ?? 'WhatsApp Device';
+
+                return [
+                    'success' => true,
+                    'status' => $status,
+                    'sender_number' => $device,
+                    'device_name' => $name,
+                    'raw' => $json,
+                ];
+            }
+
+            // Fallback: try /device endpoint
+            $altResponse = Http::withHeaders([
+                'Authorization' => $token,
+            ])->timeout(8)->post('https://api.fonnte.com/device');
+
+            if ($altResponse->successful()) {
+                $json = $altResponse->json();
+                $device = $json['device'] ?? $json['sender'] ?? null;
+                $status = $json['status'] ?? 'connected';
+
+                return [
+                    'success' => true,
+                    'status' => $status,
+                    'sender_number' => $device,
+                    'device_name' => $json['name'] ?? 'WhatsApp Device',
+                    'raw' => $json,
+                ];
+            }
+
+            return [
+                'success' => false,
+                'status' => 'disconnected',
+                'message' => $response->json()['reason'] ?? $response->json()['message'] ?? 'Device tidak terhubung atau token tidak valid',
+            ];
+        } catch (\Throwable $e) {
+            Log::warning('Fonnte checkDevice error: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'status' => 'error',
+                'message' => 'Gagal menghubungi server Fonnte: ' . $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Send raw message to Fonnte API endpoint.
+     */
+    public function sendRawMessage(string $endpoint, string $token, string $target, string $message): array
+    {
+        try {
+            $url = !empty($endpoint) ? $endpoint : 'https://api.fonnte.com/send';
+
+            $response = Http::withHeaders([
+                'Authorization' => $token,
+            ])->timeout(10)->post($url, [
+                'target' => $target,
+                'message' => $message,
+                'countryCode' => '62',
+            ]);
+
+            $json = $response->json() ?? [];
+
+            return [
+                'success' => $response->successful() && ($json['status'] ?? false) !== false,
+                'response' => $json,
+            ];
+        } catch (\Throwable $e) {
+            Log::error('Fonnte sendRawMessage error: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Send a test message initiated by the Project Owner.
+     */
+    public function sendTestMessage(Project $project, string $targetPhone, User $actor): array
+    {
+        $setting = $project->fonnteSetting;
+        if (!$setting || empty($setting->api_token)) {
+            return [
+                'success' => false,
+                'message' => 'API Token Fonnte belum diisi pada proyek ini.',
+            ];
+        }
+
+        $now = now()->setTimezone('Asia/Jakarta')->format('d M Y, H:i') . ' WIB';
+        $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:5173'), '/');
+        $projectUrl = "{$frontendUrl}/projects/{$project->id}";
+
+        $message = "✅ *Tes Koneksi NaTask — Fonnte Berhasil!*\n"
+            . "━━━━━━━━━━━━━━━━━━━\n"
+            . "📁 *Proyek:* {$project->name}\n"
+            . "👤 *Diuji oleh:* {$actor->name}\n"
+            . "🕒 *Waktu:* {$now}\n"
+            . "━━━━━━━━━━━━━━━━━━━\n"
+            . "Bot notifikasi WhatsApp untuk proyek ini telah siap dan aktif! 🎉\n"
+            . "🔗 *Buka Proyek:* {$projectUrl}";
+
+        return $this->sendRawMessage(
+            $setting->api_endpoint ?? 'https://api.fonnte.com/send',
+            $setting->api_token,
+            $targetPhone,
+            $message
+        );
+    }
+
+    /**
+     * Dispatch notification when a task is created or assigned.
+     */
+    public function notifyTaskCreated(Project $project, Task $task, User $actor): void
+    {
+        try {
+            $setting = $project->fonnteSetting;
+            if (!$this->shouldSend($setting, 'notify_task_created')) {
+                return;
+            }
+
+            $assignees = $task->assignees;
+            $assigneeNames = $assignees->isNotEmpty()
+                ? $assignees->pluck('name')->join(', ')
+                : 'Belum ditugaskan';
+
+            $dueDate = $task->due_date
+                ? \Carbon\Carbon::parse($task->due_date)->format('d M Y')
+                : '-';
+
+            $priorityEmoji = match ($task->priority) {
+                'urgent' => '🔴 Urgent',
+                'high' => '🟠 High',
+                'low' => '🟢 Low',
+                default => '🟡 Medium',
+            };
+
+            $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:5173'), '/');
+            $projectUrl = "{$frontendUrl}/projects/{$project->id}";
+
+            $message = "📌 *NaTask — Task Baru Dibuat*\n"
+                . "━━━━━━━━━━━━━━━━━━━\n"
+                . "📁 *Proyek:* {$project->name}\n"
+                . "📝 *Task:* {$task->title}\n"
+                . "👤 *Dibuat oleh:* {$actor->name}\n"
+                . "👥 *Ditugaskan ke:* {$assigneeNames}\n"
+                . "⚡ *Prioritas:* {$priorityEmoji}\n"
+                . "📅 *Deadline:* {$dueDate}\n"
+                . "━━━━━━━━━━━━━━━━━━━\n"
+                . "🔗 *Buka Proyek:* {$projectUrl}";
+
+            $this->deliverNotification($setting, $message, $assignees);
+        } catch (\Throwable $e) {
+            Log::warning('Fonnte notifyTaskCreated failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Dispatch notification when a task status is changed.
+     */
+    public function notifyTaskStatusChanged(Project $project, Task $task, TaskStatus $oldStatus, TaskStatus $newStatus, User $actor): void
+    {
+        try {
+            $setting = $project->fonnteSetting;
+            if (!$this->shouldSend($setting, 'notify_task_status_changed')) {
+                return;
+            }
+
+            $assignees = $task->assignees;
+            $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:5173'), '/');
+            $projectUrl = "{$frontendUrl}/projects/{$project->id}";
+
+            $isDone = strtolower($newStatus->name) === 'done';
+            $statusHeader = $isDone ? "✅ *Task Selesai (Done)*" : "🔄 *Status Task Berubah*";
+
+            $message = "{$statusHeader}\n"
+                . "━━━━━━━━━━━━━━━━━━━\n"
+                . "📁 *Proyek:* {$project->name}\n"
+                . "📝 *Task:* {$task->title}\n"
+                . "🏷️ *Perubahan:* {$oldStatus->name} ➔ *{$newStatus->name}*\n"
+                . "👤 *Diubah oleh:* {$actor->name}\n"
+                . "━━━━━━━━━━━━━━━━━━━\n"
+                . "🔗 *Buka Proyek:* {$projectUrl}";
+
+            $this->deliverNotification($setting, $message, $assignees);
+        } catch (\Throwable $e) {
+            Log::warning('Fonnte notifyTaskStatusChanged failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Dispatch notification when a new comment is added to a task.
+     */
+    public function notifyTaskCommented(Project $project, Task $task, Comment $comment, User $actor): void
+    {
+        try {
+            $setting = $project->fonnteSetting;
+            if (!$this->shouldSend($setting, 'notify_task_commented')) {
+                return;
+            }
+
+            $assignees = $task->assignees;
+            $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:5173'), '/');
+            $projectUrl = "{$frontendUrl}/projects/{$project->id}";
+
+            $commentSnippet = \Illuminate\Support\Str::limit(strip_tags($comment->body), 120);
+
+            $message = "💬 *NaTask — Komentar Baru di Task*\n"
+                . "━━━━━━━━━━━━━━━━━━━\n"
+                . "📁 *Proyek:* {$project->name}\n"
+                . "📝 *Task:* {$task->title}\n"
+                . "👤 *Dari:* {$actor->name}\n"
+                . "💬 *Pesan:* \"{$commentSnippet}\"\n"
+                . "━━━━━━━━━━━━━━━━━━━\n"
+                . "🔗 *Buka Task:* {$projectUrl}";
+
+            $this->deliverNotification($setting, $message, $assignees, $actor);
+        } catch (\Throwable $e) {
+            Log::warning('Fonnte notifyTaskCommented failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Dispatch notification when a new member joins the project.
+     */
+    public function notifyMemberJoined(Project $project, User $newMember, string $role): void
+    {
+        try {
+            $setting = $project->fonnteSetting;
+            if (!$this->shouldSend($setting, 'notify_member_joined')) {
+                return;
+            }
+
+            $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:5173'), '/');
+            $projectUrl = "{$frontendUrl}/projects/{$project->id}";
+
+            $message = "👥 *NaTask — Anggota Baru Bergabung*\n"
+                . "━━━━━━━━━━━━━━━━━━━\n"
+                . "📁 *Proyek:* {$project->name}\n"
+                . "👤 *Anggota:* {$newMember->name} ({$newMember->email})\n"
+                . "🔰 *Role:* " . ucfirst($role) . "\n"
+                . "━━━━━━━━━━━━━━━━━━━\n"
+                . "Selamat datang di tim! 🎉\n"
+                . "🔗 *Buka Proyek:* {$projectUrl}";
+
+            // Send to group or project owner
+            $targets = [];
+            if ($setting->target_type === 'group' || $setting->target_type === 'both') {
+                if (!empty($setting->group_target)) {
+                    $targets[] = $setting->group_target;
+                }
+            }
+
+            // Also notify owner if personal
+            if (($setting->target_type === 'personal' || $setting->target_type === 'both') && !empty($project->owner?->phone)) {
+                $targets[] = $project->owner->phone;
+            }
+
+            foreach (array_unique($targets) as $target) {
+                $this->sendRawMessage(
+                    $setting->api_endpoint ?? 'https://api.fonnte.com/send',
+                    $setting->api_token,
+                    $target,
+                    $message
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Fonnte notifyMemberJoined failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Helper to verify if notification should be sent.
+     */
+    private function shouldSend(?ProjectFonnteSetting $setting, string $triggerColumn): bool
+    {
+        if (!$setting) {
+            return false;
+        }
+
+        if (!$setting->is_enabled || empty($setting->api_token)) {
+            return false;
+        }
+
+        return (bool) ($setting->{$triggerColumn} ?? false);
+    }
+
+    /**
+     * Deliver notification to group and/or individual assignees based on target_type.
+     */
+    private function deliverNotification(
+        ProjectFonnteSetting $setting,
+        string $message,
+        $assignees = null,
+        ?User $excludeUser = null
+    ): void {
+        $targets = [];
+
+        // 1. Group Target
+        if ($setting->target_type === 'group' || $setting->target_type === 'both') {
+            if (!empty($setting->group_target)) {
+                $targets[] = $setting->group_target;
+            }
+        }
+
+        // 2. Personal Targets (Assignees with valid phone numbers)
+        if ($setting->target_type === 'personal' || $setting->target_type === 'both') {
+            if ($assignees && method_exists($assignees, 'all')) {
+                foreach ($assignees as $assignee) {
+                    if ($excludeUser && (int) $assignee->id === (int) $excludeUser->id) {
+                        continue;
+                    }
+                    if (!empty($assignee->phone)) {
+                        $targets[] = $assignee->phone;
+                    }
+                }
+            }
+        }
+
+        $targets = array_unique(array_filter($targets));
+
+        foreach ($targets as $target) {
+            $this->sendRawMessage(
+                $setting->api_endpoint ?? 'https://api.fonnte.com/send',
+                $setting->api_token,
+                $target,
+                $message
+            );
+        }
+    }
+}

@@ -188,6 +188,9 @@ class TaskController extends Controller
             'checklists.items',
         ]);
 
+        // Send Fonnte WhatsApp notification
+        app(\App\Services\FonnteNotificationService::class)->notifyTaskCreated($project, $task, $request->user());
+
         return response()->json([
             'success' => true,
             'message' => 'Task created successfully',
@@ -250,6 +253,8 @@ class TaskController extends Controller
 
         $this->validateProjectRelations($task->project, $request->status_id, $request->assignee_ids, $request->label_ids);
 
+        $oldStatus = $task->status;
+
         $task->update($request->only([
             'title', 'description', 'status_id', 'priority', 'start_date', 'due_date', 'position'
         ]));
@@ -267,6 +272,20 @@ class TaskController extends Controller
             'task_title' => $task->title,
         ]);
         ProjectChanged::dispatch($task->project, 'task.updated', $task->id);
+
+        // Send Fonnte WhatsApp notification if status changed
+        if ($oldStatus && $task->status_id && (int) $oldStatus->id !== (int) $task->status_id) {
+            $newStatus = TaskStatus::find($task->status_id);
+            if ($newStatus) {
+                app(\App\Services\FonnteNotificationService::class)->notifyTaskStatusChanged(
+                    $task->project,
+                    $task,
+                    $oldStatus,
+                    $newStatus,
+                    $request->user()
+                );
+            }
+        }
 
         $task->load([
             'project:id,name,slug',
@@ -672,6 +691,14 @@ class TaskController extends Controller
             'task_title' => $task->title,
         ]);
         ProjectChanged::dispatch($task->project, 'comment.created', $task->id);
+
+        // Send Fonnte WhatsApp notification
+        app(\App\Services\FonnteNotificationService::class)->notifyTaskCommented(
+            $task->project,
+            $task,
+            $comment,
+            $request->user()
+        );
 
         return response()->json([
             'success' => true,

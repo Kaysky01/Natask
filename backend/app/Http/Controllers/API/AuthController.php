@@ -129,6 +129,7 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|required|string|email|max:255|unique:users,email,' . $user->id,
+            'phone' => 'nullable|string|max:30',
             'bio' => 'nullable|string|max:1000',
             'timezone' => 'sometimes|required|string|max:50',
             'preferences' => 'nullable|array',
@@ -143,7 +144,7 @@ class AuthController extends Controller
         }
 
         $user->update($request->only([
-            'name', 'email', 'bio', 'timezone', 'preferences'
+            'name', 'email', 'phone', 'bio', 'timezone', 'preferences'
         ]));
 
         return response()->json([

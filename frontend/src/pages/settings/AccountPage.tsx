@@ -17,6 +17,7 @@ export const AccountPage: React.FC = () => {
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [bio, setBio] = useState('');
   const [timezone, setTimezone] = useState('UTC');
   const [emailNotifications, setEmailNotifications] = useState(true);
@@ -28,6 +29,7 @@ export const AccountPage: React.FC = () => {
     if (!user) return;
     setName(user.name);
     setEmail(user.email);
+    setPhone(user.phone || '');
     setBio(user.bio || '');
     setTimezone(user.timezone || 'UTC');
     setEmailNotifications(user.preferences?.email_notifications !== false);
@@ -42,6 +44,7 @@ export const AccountPage: React.FC = () => {
       await updateProfile({
         name: name.trim(),
         email: email.trim(),
+        phone: phone.trim() || undefined,
         bio: bio.trim() || undefined,
         timezone,
         preferences: { email_notifications: emailNotifications },
@@ -169,6 +172,18 @@ export const AccountPage: React.FC = () => {
             <div className="space-y-1">
               <label className="text-xs font-semibold text-text">Email address</label>
               <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-text">Nomor WhatsApp</label>
+                <span className="text-[10px] text-muted">Untuk menerima notifikasi bot WhatsApp personal</span>
+              </div>
+              <Input
+                type="tel"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="Contoh: 081234567890 atau 6281234567890"
+              />
             </div>
           </div>
 

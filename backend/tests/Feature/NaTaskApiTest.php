@@ -599,6 +599,131 @@ class NaTaskApiTest extends TestCase
             ],
         ]);
     }
+
+    public function test_fonnte_whatsapp_integration_lifecycle_and_owner_permissions(): void
+    {
+        \Illuminate\Support\Facades\Http::fake([
+            'https://api.fonnte.com/*' => \Illuminate\Support\Facades\Http::response([
+                'status' => true,
+                'device' => '628123456789',
+                'name' => 'Test Bot Device',
+                'target' => ['628123456789'],
+            ], 200),
+        ]);
+
+        $owner = User::create([
+            'name' => 'Fonnte Owner',
+            'email' => 'fonnte_owner_' . uniqid() . '@natask.com',
+            'phone' => '081234567890',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+
+        $member = User::create([
+            'name' => 'Fonnte Member',
+            'email' => 'fonnte_member_' . uniqid() . '@natask.com',
+            'phone' => '089876543210',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+
+        $project = Project::create([
+            'name' => 'Fonnte WhatsApp Project ' . uniqid(),
+            'owner_id' => $owner->id,
+            'status' => 'active',
+            'priority' => 'medium',
+        ]);
+        $project->createDefaultStatuses();
+        $project->members()->attach($member->id, ['role' => 'member']);
+
+        // 1. Member tries to get Fonnte settings -> 403 Forbidden
+        $respMemberGet = $this->actingAs($member, 'sanctum')
+            ->getJson("/api/projects/{$project->id}/fonnte");
+        $respMemberGet->assertStatus(403);
+
+        // 2. Owner gets default Fonnte settings -> 200 OK
+        $respOwnerGet = $this->actingAs($owner, 'sanctum')
+            ->getJson("/api/projects/{$project->id}/fonnte");
+        $respOwnerGet->assertStatus(200);
+        $respOwnerGet->assertJson([
+            'success' => true,
+            'data' => [
+                'is_enabled' => false,
+                'target_type' => 'group',
+            ],
+        ]);
+
+        // 3. Member tries to update Fonnte settings -> 403 Forbidden
+        $respMemberUpdate = $this->actingAs($member, 'sanctum')
+            ->postJson("/api/projects/{$project->id}/fonnte", [
+                'is_enabled' => true,
+                'api_token' => 'sample_token_123',
+                'target_type' => 'group',
+            ]);
+        $respMemberUpdate->assertStatus(403);
+
+        // 4. Owner updates Fonnte settings -> 200 OK
+        $respOwnerUpdate = $this->actingAs($owner, 'sanctum')
+            ->postJson("/api/projects/{$project->id}/fonnte", [
+                'is_enabled' => true,
+                'api_token' => 'secret_fonnte_api_token_xyz',
+                'api_endpoint' => 'https://api.fonnte.com/send',
+                'target_type' => 'both',
+                'group_target' => '120363028392819@g.us',
+                'notify_task_created' => true,
+                'notify_task_status_changed' => true,
+                'notify_task_commented' => true,
+                'notify_member_joined' => true,
+            ]);
+        $respOwnerUpdate->assertStatus(200);
+        $respOwnerUpdate->assertJson([
+            'success' => true,
+            'data' => [
+                'is_enabled' => true,
+                'is_token_set' => true,
+                'target_type' => 'both',
+                'group_target' => '120363028392819@g.us',
+            ],
+        ]);
+
+        // 5. Check device status
+        $respCheck = $this->actingAs($owner, 'sanctum')
+            ->postJson("/api/projects/{$project->id}/fonnte/check-device");
+        $respCheck->assertStatus(200);
+
+        // 6. Test send message
+        $respTestSend = $this->actingAs($owner, 'sanctum')
+            ->postJson("/api/projects/{$project->id}/fonnte/test-send", [
+                'target' => '081234567890',
+            ]);
+        $respTestSend->assertStatus(200);
+
+        // 7. Verify Task creation triggers notification without error
+        $todoStatus = $project->taskStatuses()->where('name', 'To Do')->first();
+        $doneStatus = $project->taskStatuses()->where('name', 'Done')->first();
+
+        $respTask = $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/tasks', [
+                'project_id' => $project->id,
+                'title' => 'Fonnte Auto Notification Task',
+                'status_id' => $todoStatus->id,
+                'assignee_ids' => [$member->id],
+            ]);
+        $respTask->assertStatus(201);
+        $taskId = $respTask->json('data.id');
+
+        // 8. Verify Task status change triggers notification
+        $respStatusChange = $this->actingAs($member, 'sanctum')
+            ->putJson("/api/tasks/{$taskId}", [
+                'status_id' => $doneStatus->id,
+            ]);
+        $respStatusChange->assertStatus(200);
+
+        // 9. Verify Comment creation triggers notification
+        $respComment = $this->actingAs($member, 'sanctum')
+            ->postJson("/api/tasks/{$taskId}/comments", [
+                'body' => 'Komentar pengujian notifikasi WhatsApp!',
+            ]);
+        $respComment->assertStatus(201);
+    }
 }
 
 
