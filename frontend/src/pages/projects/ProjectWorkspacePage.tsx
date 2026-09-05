@@ -198,11 +198,18 @@ export const ProjectWorkspacePage: React.FC = () => {
             </Button>
 
             <div className="flex -space-x-2 overflow-hidden">
-              {project.members?.map((m) => (
-                <div key={m.id} title={`${m.user?.name} (${m.role})`}>
-                  <Avatar name={m.user?.name || 'User'} src={m.user?.avatar} size="sm" />
-                </div>
-              ))}
+              {project.members?.map((m) => {
+                const memberId = m.user_id ?? m.pivot?.user_id ?? m.id;
+                const memberName = m.user?.name ?? m.name ?? (memberId === currentUser?.id ? currentUser.name : 'User');
+                const memberAvatar = m.user?.avatar ?? m.avatar ?? (memberId === currentUser?.id ? currentUser.avatar : undefined);
+                const memberRole = m.role ?? m.pivot?.role ?? (memberId === project.owner_id ? 'owner' : 'member');
+
+                return (
+                  <div key={m.id} title={`${memberName} (${memberRole})`}>
+                    <Avatar name={memberName} src={memberAvatar} size="sm" />
+                  </div>
+                );
+              })}
             </div>
 
             {canInviteMembers && (
