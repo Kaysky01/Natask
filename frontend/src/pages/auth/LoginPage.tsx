@@ -147,7 +147,7 @@ export const LoginPage: React.FC = () => {
 
         {/* Footer */}
         <p className="text-center text-xs text-muted">
-          Don't have an account yet?{' '}
+          Don't have an account?{' '}
           <Link to="/register" className="text-primary font-semibold hover:underline">
             Sign up
           </Link>
