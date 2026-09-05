@@ -35,6 +35,7 @@ class Project extends Model
      * @var array<string, string>
      */
     protected $casts = [
+        'owner_id' => 'integer',
         'start_date' => 'date',
         'due_date' => 'date',
     ];
@@ -48,7 +49,12 @@ class Project extends Model
 
         static::creating(function ($project) {
             if (empty($project->slug)) {
-                $project->slug = Str::slug($project->name);
+                $slug = Str::slug($project->name) ?: 'project';
+                $originalSlug = $slug;
+                while (static::where('slug', $slug)->exists()) {
+                    $slug = "{$originalSlug}-" . Str::lower(Str::random(6));
+                }
+                $project->slug = $slug;
             }
         });
 

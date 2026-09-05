@@ -205,9 +205,10 @@ export const DashboardPage: React.FC = () => {
                   <span>{project.tasks_count ?? 0} tasks total</span>
                   <div className="flex -space-x-1.5 overflow-hidden">
                     {project.members?.slice(0, 3).map((m) => (
-                      <Avatar key={m.id} name={m.user?.name || 'User'} src={m.user?.avatar} size="xs" />
+                      <Avatar key={m.id} name={m.user?.name ?? m.name ?? 'User'} src={m.user?.avatar ?? m.avatar} size="xs" />
                     ))}
                   </div>
+
                 </div>
               </Link>
             ))}

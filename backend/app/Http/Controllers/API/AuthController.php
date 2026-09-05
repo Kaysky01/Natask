@@ -171,8 +171,12 @@ class AuthController extends Controller
         }
 
         $user = $request->user();
-        if ($user->avatar && str_starts_with($user->avatar, '/storage/avatars/')) {
-            Storage::disk('public')->delete(str_replace('/storage/', '', $user->avatar));
+        if ($user->avatar) {
+            $parsedPath = parse_url($user->avatar, PHP_URL_PATH);
+            if ($parsedPath && str_contains($parsedPath, '/storage/avatars/')) {
+                $relativeStoragePath = substr($parsedPath, strpos($parsedPath, '/storage/') + 9);
+                Storage::disk('public')->delete($relativeStoragePath);
+            }
         }
 
         $path = $request->file('avatar')->store('avatars/' . $user->id, 'public');
@@ -184,6 +188,7 @@ class AuthController extends Controller
             'data' => $user->fresh(),
         ]);
     }
+
 
     /**
      * Redirect to Google OAuth.
@@ -211,21 +216,32 @@ class AuthController extends Controller
         try {
             $googleUser = Socialite::driver('google')->stateless()->user();
 
-            $user = User::where('email', $googleUser->email)->first();
+            $email = $googleUser->getEmail();
+            $googleId = $googleUser->getId();
+            $name = $googleUser->getName() ?: ($googleUser->getNickname() ?: 'Google User');
+            $avatar = $googleUser->getAvatar();
+
+            $user = User::where('email', $email)->first();
 
             if ($user) {
                 // Update Google ID if not set
-                if (!$user->google_id) {
-                    $user->update([
-                        'google_id' => $googleUser->id,
-                    ]);
+                if (!$user->google_id && $googleId) {
+                    $user->google_id = $googleId;
                 }
+
+                // Update avatar if Google provides one; retain existing avatar if Google doesn't
+                if (!empty($avatar)) {
+                    $user->avatar = $avatar;
+                }
+
+                $user->save();
             } else {
-                // Create new user
+                // Create new user with Google profile information
                 $user = User::create([
-                    'name' => $googleUser->name,
-                    'email' => $googleUser->email,
-                    'google_id' => $googleUser->id,
+                    'name' => $name,
+                    'email' => $email,
+                    'google_id' => $googleId,
+                    'avatar' => $avatar,
                     'email_verified_at' => now(),
                 ]);
             }
@@ -234,13 +250,13 @@ class AuthController extends Controller
             $token = $user->createToken('auth_token')->plainTextToken;
 
             // Redirect to frontend with token
-            $frontendUrl = config('app.frontend_url', 'http://localhost:3000');
+            $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:3000'), '/');
             
-            return redirect()->away($frontendUrl . '/auth/callback?token=' . $token);
+            return redirect()->away($frontendUrl . '/auth/callback?token=' . urlencode($token));
 
-        } catch (\Exception $e) {
-            $frontendUrl = config('app.frontend_url', 'http://localhost:3000');
-            return redirect()->away($frontendUrl . '/auth/callback?error=oauth_failed');
+        } catch (\Throwable $e) {
+            $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:3000'), '/');
+            return redirect()->away($frontendUrl . '/auth/callback?error=' . urlencode('oauth_failed'));
         }
     }
 }

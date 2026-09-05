@@ -51,6 +51,7 @@ interface KanbanBoardProps {
   tasks: Task[];
   members: ProjectMember[];
   labels?: Label[];
+  readOnly?: boolean;
 }
 
 // Single Sortable Task Card
@@ -60,7 +61,8 @@ const TaskCard: React.FC<{
   statuses: TaskStatus[];
   statusId: number;
   onStatusDraft: (taskId: number, statusId: number) => void;
-}> = ({ task, onClick, statuses, statusId, onStatusDraft }) => {
+  readOnly?: boolean;
+}> = ({ task, onClick, statuses, statusId, onStatusDraft, readOnly = false }) => {
   const {
     attributes,
     listeners,
@@ -68,7 +70,8 @@ const TaskCard: React.FC<{
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id });
+  } = useSortable({ id: task.id, disabled: readOnly });
+
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -222,7 +225,9 @@ const KanbanColumn: React.FC<{
   statuses: TaskStatus[];
   pendingTaskStatuses: Record<number, number>;
   onStatusDraft: (taskId: number, statusId: number) => void;
-}> = ({ projectId, status, tasks, onTaskClick, onAddTask, statuses, pendingTaskStatuses, onStatusDraft }) => {
+  readOnly?: boolean;
+}> = ({ projectId, status, tasks, onTaskClick, onAddTask, statuses, pendingTaskStatuses, onStatusDraft, readOnly = false }) => {
+
   const [isAdding, setIsAdding] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -296,7 +301,7 @@ const KanbanColumn: React.FC<{
             style={{ backgroundColor: status.color || '#64748B' }}
           />
 
-          {isEditingTitle ? (
+          {isEditingTitle && !readOnly ? (
             <div className="flex items-center gap-1 flex-1">
               <input
                 type="text"
@@ -318,9 +323,13 @@ const KanbanColumn: React.FC<{
             </div>
           ) : (
             <h3
-              onClick={() => setIsEditingTitle(true)}
-              className="text-xs font-bold text-text uppercase tracking-wider truncate cursor-pointer hover:underline"
-              title="Click to rename"
+              onClick={() => {
+                if (!readOnly) setIsEditingTitle(true);
+              }}
+              className={`text-xs font-bold text-text uppercase tracking-wider truncate ${
+                !readOnly ? 'cursor-pointer hover:underline' : ''
+              }`}
+              title={!readOnly ? 'Click to rename' : undefined}
             >
               {status.name}
             </h3>
@@ -331,25 +340,30 @@ const KanbanColumn: React.FC<{
           </span>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0 relative">
-          <button
-            onClick={() => setIsAdding(true)}
-            className="p-1 text-muted hover:text-text rounded-md hover:bg-surface transition-colors"
-            title="Add task to this list"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
+        {/* Right Header Action Buttons */}
+        <div className="flex items-center gap-0.5 relative">
+          {!readOnly && (
+            <>
+              <button
+                onClick={() => setIsAdding(true)}
+                className="p-1 text-muted hover:text-text rounded-md hover:bg-surface transition-colors"
+                title="Add task to this list"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
 
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="p-1 text-muted hover:text-text rounded-md hover:bg-surface transition-colors"
-            title="List actions"
-          >
-            <MoreHorizontal className="w-4 h-4" />
-          </button>
+              <button
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="p-1 text-muted hover:text-text rounded-md hover:bg-surface transition-colors"
+                title="List actions"
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+            </>
+          )}
 
           {/* List Actions Dropdown */}
-          {isMenuOpen && (
+          {!readOnly && isMenuOpen && (
             <div className="absolute right-0 top-7 z-30 w-48 bg-surface border border-border rounded-xl shadow-lg p-2 space-y-2 animate-in fade-in zoom-in-95 duration-100">
               <p className="text-[11px] font-semibold text-muted px-2">List actions</p>
 
@@ -417,6 +431,7 @@ const KanbanColumn: React.FC<{
               statuses={statuses}
               statusId={pendingTaskStatuses[task.id] ?? task.status_id}
               onStatusDraft={onStatusDraft}
+              readOnly={readOnly}
             />
           ))}
         </SortableContext>
@@ -428,7 +443,7 @@ const KanbanColumn: React.FC<{
         )}
 
         {/* Inline Trello-style Quick Add Form */}
-        {isAdding && (
+        {!readOnly && isAdding && (
           <form
             onSubmit={handleCreate}
             className="p-2.5 bg-surface border border-primary/40 rounded-xl space-y-2 shadow-sm animate-in fade-in duration-100"
@@ -473,7 +488,7 @@ const KanbanColumn: React.FC<{
       </div>
 
       {/* Bottom "+ Add a card" button if not currently adding */}
-      {!isAdding && (
+      {!readOnly && !isAdding && (
         <button
           onClick={() => setIsAdding(true)}
           className="mt-2.5 flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted hover:text-text hover:bg-surface rounded-lg transition-colors w-full text-left"
@@ -492,7 +507,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   tasks,
   members,
   labels = [],
+  readOnly = false,
 }) => {
+
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -798,57 +815,60 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     statuses={statuses}
                     pendingTaskStatuses={pendingTaskStatuses}
                     onStatusDraft={handleTaskStatusDraft}
+                    readOnly={readOnly}
                   />
                 );
               })}
 
               {/* Trello "+ Add another list" Column */}
-              <div className="w-72 shrink-0">
-                {isAddingList ? (
-                  <form
-                    onSubmit={handleAddList}
-                    className="p-3 bg-surface border border-primary/40 rounded-2xl space-y-2.5 shadow-sm animate-in fade-in duration-100"
-                  >
-                    <input
-                      type="text"
-                      placeholder="Enter list title..."
-                      value={newListTitle}
-                      onChange={(e) => setNewListTitle(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Escape') setIsAddingList(false);
-                      }}
-                      className="w-full text-xs font-semibold bg-background border border-border rounded-xl p-2.5 text-text focus:outline-none focus:ring-1 focus:ring-primary"
-                      autoFocus
-                    />
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="submit"
-                        variant="primary"
-                        size="sm"
-                        className="text-xs h-8"
-                        disabled={!newListTitle.trim() || createStatus.isPending}
-                      >
-                        {createStatus.isPending ? 'Adding...' : 'Add list'}
-                      </Button>
-                      <button
-                        type="button"
-                        onClick={() => setIsAddingList(false)}
-                        className="p-1.5 text-muted hover:text-text rounded-lg"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <button
-                    onClick={() => setIsAddingList(true)}
-                    className="w-full flex items-center gap-2 p-3 rounded-2xl bg-surface/40 hover:bg-surface/80 border border-dashed border-border hover:border-primary/50 text-xs font-semibold text-muted hover:text-text transition-all"
-                  >
-                    <Plus className="w-4 h-4 text-primary" />
-                    Add another list
-                  </button>
-                )}
-              </div>
+              {!readOnly && (
+                <div className="w-72 shrink-0">
+                  {isAddingList ? (
+                    <form
+                      onSubmit={handleAddList}
+                      className="p-3 bg-surface border border-primary/40 rounded-2xl space-y-2.5 shadow-sm animate-in fade-in duration-100"
+                    >
+                      <input
+                        type="text"
+                        placeholder="Enter list title..."
+                        value={newListTitle}
+                        onChange={(e) => setNewListTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') setIsAddingList(false);
+                        }}
+                        className="w-full text-xs font-semibold bg-background border border-border rounded-xl p-2.5 text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                        autoFocus
+                      />
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="submit"
+                          variant="primary"
+                          size="sm"
+                          className="text-xs h-8"
+                          disabled={!newListTitle.trim() || createStatus.isPending}
+                        >
+                          {createStatus.isPending ? 'Adding...' : 'Add list'}
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingList(false)}
+                          className="p-1.5 text-muted hover:text-text rounded-lg"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <button
+                      onClick={() => setIsAddingList(true)}
+                      className="w-full flex items-center gap-2 p-3 rounded-2xl bg-surface/40 hover:bg-surface/80 border border-dashed border-border hover:border-primary/50 text-xs font-semibold text-muted hover:text-text transition-all"
+                    >
+                      <Plus className="w-4 h-4 text-primary" />
+                      Add another list
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </DndContext>
         )}
@@ -865,9 +885,11 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         statuses={statuses}
         members={members}
         projectLabels={labels}
+        readOnly={readOnly}
       />
     </div>
   );
 };
 
 export default KanbanBoard;
+

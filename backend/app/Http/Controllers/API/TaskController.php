@@ -836,7 +836,7 @@ class TaskController extends Controller
             abort(404, 'Project not found');
         }
 
-        if ($project->owner_id !== $user->id && !$project->members()->where('user_id', $user->id)->exists()) {
+        if ((int) $project->owner_id !== (int) $user->id && !$project->members()->where('user_id', $user->id)->exists()) {
             abort(403, 'You do not have access to this task');
         }
 
@@ -847,7 +847,7 @@ class TaskController extends Controller
 
     protected function authorizeMember(User $user, Project $project): void
     {
-        if ($project->owner_id !== $user->id && !$project->members()->where('user_id', $user->id)->exists()) {
+        if ((int) $project->owner_id !== (int) $user->id && !$project->members()->where('user_id', $user->id)->exists()) {
             abort(403, 'You are not a member of this project');
         }
 

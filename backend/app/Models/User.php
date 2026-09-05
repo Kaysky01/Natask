@@ -28,7 +28,9 @@ class User extends Authenticatable
         'timezone',
         'preferences',
         'google_id',
+        'email_verified_at',
     ];
+
 
     /**
      * The attributes that should be hidden for serialization.

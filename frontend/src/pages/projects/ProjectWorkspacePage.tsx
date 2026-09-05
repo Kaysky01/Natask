@@ -163,8 +163,12 @@ export const ProjectWorkspacePage: React.FC = () => {
   const currentRole: ProjectRole = project.owner_id === currentUser?.id
     ? 'owner'
     : currentMember?.role ?? currentMember?.pivot?.role ?? 'member';
-  const canManageMembers = currentRole === 'owner' || currentRole === 'admin';
-  const canInviteMembers = currentRole !== 'viewer';
+  const isOwner = currentRole === 'owner';
+  const isAdmin = isOwner || currentRole === 'admin';
+  const isViewer = currentRole === 'viewer';
+  const canDeleteProject = isOwner; // Only the project owner can delete the project
+  const canInviteMembers = isAdmin; // Only owner and admin can invite members
+  const canCreateTask = !isViewer; // Owner, Admin, Member can write/create tasks; Viewer cannot
   const currentSelectedTask = selectedTask
     ? project.tasks?.find((t) => t.id === selectedTask.id) || selectedTask
     : null;
@@ -179,6 +183,9 @@ export const ProjectWorkspacePage: React.FC = () => {
               <h1 className="text-xl font-bold tracking-tight text-text">{project.name}</h1>
               <Badge variant={priorityVariant} size="sm">{project.priority}</Badge>
               <Badge variant="neutral" size="sm">{project.status}</Badge>
+              {isViewer && (
+                <Badge variant="neutral" size="sm">Viewer (Read-only)</Badge>
+              )}
             </div>
             {project.description && (
               <p className="text-xs text-muted max-w-2xl">{project.description}</p>
@@ -187,15 +194,34 @@ export const ProjectWorkspacePage: React.FC = () => {
 
           {/* Members Avatars & Add Member */}
           <div className="flex items-center gap-3">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsCreateTaskOpen(true)}
-              className="text-xs h-8"
-            >
-              <Plus className="w-3.5 h-3.5 mr-1.5" />
-              New Task
-            </Button>
+            {project.members && project.members.length > 0 && (
+              <div className="flex -space-x-1.5 overflow-hidden items-center mr-1" title="Project Members">
+                {project.members.slice(0, 5).map((m) => {
+                  const name = m.user?.name ?? m.name ?? 'User';
+                  const avatar = m.user?.avatar ?? m.avatar;
+                  return (
+                    <Avatar key={m.id} name={name} src={avatar} size="xs" className="ring-2 ring-surface" />
+                  );
+                })}
+                {project.members.length > 5 && (
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-background border border-border text-[9px] font-semibold text-muted ring-2 ring-surface">
+                    +{project.members.length - 5}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {canCreateTask && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsCreateTaskOpen(true)}
+                className="text-xs h-8"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                New Task
+              </Button>
+            )}
 
             {canInviteMembers && (
               <Button
@@ -209,7 +235,7 @@ export const ProjectWorkspacePage: React.FC = () => {
               </Button>
             )}
 
-            {canManageMembers && (
+            {canDeleteProject && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -222,6 +248,7 @@ export const ProjectWorkspacePage: React.FC = () => {
             )}
           </div>
         </div>
+
 
         {/* Workspace Navigation Tabs */}
         <div className="flex items-center gap-1 border-t border-border/60 pt-3">
@@ -258,6 +285,7 @@ export const ProjectWorkspacePage: React.FC = () => {
             tasks={project.tasks || []}
             members={project.members || []}
             labels={projectLabels}
+            readOnly={isViewer}
           />
         )}
 
@@ -290,21 +318,29 @@ export const ProjectWorkspacePage: React.FC = () => {
                         <span className="block truncate" title={task.title}>{task.title}</span>
                       </td>
                       <td className="py-3 px-4">
-                        <select
-                          value={pendingTaskStatuses[task.id] || task.status_id}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => setPendingTaskStatuses((current) => ({ ...current, [task.id]: Number(e.target.value) }))}
-                          className="text-xs bg-background border border-border rounded-md px-2 py-1 text-text"
-                        >
-                          {statuses.map((s: TaskStatus) => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                          ))}
-                        </select>
-                        {pendingTaskStatuses[task.id] && (
-                          <div className="flex items-center gap-1 mt-1">
-                            <button type="button" onClick={(e) => { e.stopPropagation(); handleSaveTaskStatus(task.id); }} className="text-[10px] text-primary font-semibold hover:underline">Save</button>
-                            <button type="button" onClick={(e) => { e.stopPropagation(); setPendingTaskStatuses((current) => { const next = { ...current }; delete next[task.id]; return next; }); }} className="text-[10px] text-muted hover:text-text">Cancel</button>
-                          </div>
+                        {isViewer ? (
+                          <Badge variant="neutral" size="sm">
+                            {task.status?.name ?? 'Todo'}
+                          </Badge>
+                        ) : (
+                          <>
+                            <select
+                              value={pendingTaskStatuses[task.id] || task.status_id}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => setPendingTaskStatuses((current) => ({ ...current, [task.id]: Number(e.target.value) }))}
+                              className="text-xs bg-background border border-border rounded-md px-2 py-1 text-text"
+                            >
+                              {statuses.map((s: TaskStatus) => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                              ))}
+                            </select>
+                            {pendingTaskStatuses[task.id] && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <button type="button" onClick={(e) => { e.stopPropagation(); handleSaveTaskStatus(task.id); }} className="text-[10px] text-primary font-semibold hover:underline">Save</button>
+                                <button type="button" onClick={(e) => { e.stopPropagation(); setPendingTaskStatuses((current) => { const next = { ...current }; delete next[task.id]; return next; }); }} className="text-[10px] text-muted hover:text-text">Cancel</button>
+                              </div>
+                            )}
+                          </>
                         )}
                       </td>
                       <td className="py-3 px-4">
@@ -388,6 +424,13 @@ export const ProjectWorkspacePage: React.FC = () => {
                     const memberEmail = member.user?.email ?? member.email ?? '';
                     const memberAvatar = member.user?.avatar ?? member.avatar;
                     const memberRole = member.role ?? member.pivot?.role ?? 'member';
+                    const canEditThisRole =
+                      (isOwner && memberRole !== 'owner') ||
+                      (isAdmin && !isOwner && memberRole !== 'owner' && memberRole !== 'admin');
+                    const canKickThisMember =
+                      (isOwner && memberRole !== 'owner') ||
+                      (isAdmin && !isOwner && memberRole !== 'owner' && memberRole !== 'admin');
+
                     return (
                   <div key={member.id} className="py-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -399,7 +442,7 @@ export const ProjectWorkspacePage: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-3">
-                      {currentRole === 'owner' && memberRole !== 'owner' ? (
+                      {canEditThisRole ? (
                         <div className="flex items-center gap-1">
                           <select
                             value={pendingMemberRoles[memberId] || memberRole}
@@ -407,9 +450,9 @@ export const ProjectWorkspacePage: React.FC = () => {
                               ...current,
                               [memberId]: event.target.value as 'admin' | 'member' | 'viewer',
                             }))}
-                            className="text-[11px] bg-background border border-border rounded-md px-2 py-1 text-text"
+                            className="text-[11px] bg-background border border-border rounded-md px-2 py-1 text-text capitalize"
                           >
-                            <option value="admin">admin</option>
+                            {isOwner && <option value="admin">admin</option>}
                             <option value="member">member</option>
                             <option value="viewer">viewer</option>
                           </select>
@@ -425,12 +468,12 @@ export const ProjectWorkspacePage: React.FC = () => {
                           )}
                         </div>
                       ) : (
-                        <Badge variant={memberRole === 'owner' ? 'primary' : 'neutral'} size="sm">
+                        <Badge variant={memberRole === 'owner' ? 'primary' : memberRole === 'admin' ? 'warning' : 'neutral'} size="sm">
                           {memberRole}
                         </Badge>
                       )}
 
-                      {canManageMembers && memberRole !== 'owner' && (
+                      {canKickThisMember && (
                         <button
                           onClick={() => setMemberToRemove(memberId)}
                           className="p-1 text-muted hover:text-error rounded transition-colors"
@@ -464,7 +507,7 @@ export const ProjectWorkspacePage: React.FC = () => {
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value as any)}
                 >
-                  {canManageMembers && <option value="admin">Admin</option>}
+                  {isOwner && <option value="admin">Admin</option>}
                   <option value="member">Member</option>
                   <option value="viewer">Viewer</option>
                 </select>
@@ -535,6 +578,7 @@ export const ProjectWorkspacePage: React.FC = () => {
         statuses={statuses}
         members={project.members || []}
         projectLabels={projectLabels}
+        readOnly={isViewer}
       />
     </div>
   );

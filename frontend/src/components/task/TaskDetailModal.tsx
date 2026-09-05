@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Avatar } from '../ui/Avatar';
+import { Badge } from '../ui/Badge';
 import type { Task, ProjectMember, TaskStatus, Label, Priority } from '../../types';
 import {
   useUpdateTask,
@@ -48,6 +49,7 @@ interface TaskDetailModalProps {
   statuses?: TaskStatus[];
   members?: ProjectMember[];
   projectLabels?: Label[];
+  readOnly?: boolean;
 }
 
 export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
@@ -57,7 +59,9 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   statuses = [],
   members = [],
   projectLabels = [],
+  readOnly = false,
 }) => {
+
   const { user: currentUser } = useAuthStore();
   const { error: toastError, success: toastSuccess } = useToast();
 
@@ -363,7 +367,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         <div className="px-6 py-4 border-b border-border bg-surface flex items-start justify-between gap-4 shrink-0">
           <div className="space-y-1 flex-1 min-w-0">
             {/* Inline Title Editing */}
-            {isEditingTitle ? (
+            {!readOnly && isEditingTitle ? (
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -373,7 +377,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     if (e.key === 'Enter') handleSaveTitle();
                     if (e.key === 'Escape') setIsEditingTitle(false);
                   }}
-                  className="w-full text-base md:text-lg font-bold bg-background border border-primary/50 rounded-lg px-2.5 py-1 text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full text-base font-bold bg-background border border-primary rounded px-2 py-1 text-text focus:outline-none"
                   autoFocus
                 />
                 <Button
@@ -386,29 +390,40 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                 </Button>
               </div>
             ) : (
-              <h2
-                onClick={() => setIsEditingTitle(true)}
-                className="text-base md:text-lg font-bold text-text truncate cursor-pointer hover:bg-background/50 rounded px-1 -mx-1 py-0.5 transition-colors"
-                title="Click to edit title"
-              >
-                {taskData?.title}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2
+                  onClick={() => !readOnly && setIsEditingTitle(true)}
+                  className={`text-base md:text-lg font-bold text-text truncate rounded px-1 -mx-1 py-0.5 transition-colors ${
+                    !readOnly ? 'cursor-pointer hover:bg-background/50' : ''
+                  }`}
+                  title={!readOnly ? 'Click to edit title' : undefined}
+                >
+                  {taskData?.title}
+                </h2>
+                {readOnly && (
+                  <Badge variant="neutral" size="sm">Viewer (Read-only)</Badge>
+                )}
+              </div>
             )}
 
             {/* List location breadcrumb */}
             <div className="flex items-center gap-2 text-xs text-muted">
               <span>in list</span>
-              <select
-                value={draftStatusId ?? taskData?.status_id ?? task.status_id}
-                onChange={(e) => handleStatusChange(Number(e.target.value))}
-                className="font-semibold text-text bg-background/80 border border-border rounded px-2 py-0.5 text-xs hover:border-primary/40 focus:outline-none"
-              >
-                {statuses.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+              {!readOnly ? (
+                <select
+                  value={draftStatusId ?? taskData?.status_id ?? task.status_id}
+                  onChange={(e) => handleStatusChange(Number(e.target.value))}
+                  className="font-semibold text-text bg-background/80 border border-border rounded px-2 py-0.5 text-xs hover:border-primary/40 focus:outline-none"
+                >
+                  {statuses.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-semibold text-text">{currentStatus?.name || '—'}</span>
+              )}
             </div>
           </div>
 
@@ -521,7 +536,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                   <Edit2 className="w-3.5 h-3.5" />
                   Description
                 </h3>
-                {!isEditingDescription && (
+                {!readOnly && !isEditingDescription && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -533,7 +548,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                 )}
               </div>
 
-              {isEditingDescription ? (
+              {!readOnly && isEditingDescription ? (
                 <div className="space-y-2">
                   <textarea
                     rows={4}
@@ -566,8 +581,10 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                 </div>
               ) : (
                 <div
-                  onClick={() => setIsEditingDescription(true)}
-                  className={`p-3 rounded-xl border text-xs leading-relaxed cursor-pointer transition-colors ${
+                  onClick={() => !readOnly && setIsEditingDescription(true)}
+                  className={`p-3 rounded-xl border text-xs leading-relaxed transition-colors ${
+                    !readOnly ? 'cursor-pointer' : ''
+                  } ${
                     taskData?.description
                       ? 'bg-background border-border text-text hover:border-primary/40'
                       : 'bg-background/40 border-dashed border-border text-muted hover:bg-background'
@@ -576,7 +593,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                   {taskData?.description ? (
                     <p className="whitespace-pre-wrap">{taskData.description}</p>
                   ) : (
-                    <p className="italic">Add a more detailed description...</p>
+                    <p className="italic">No description provided.</p>
                   )}
                 </div>
               )}
@@ -605,14 +622,17 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                           {checklist.title}
                         </h4>
                       </div>
-                      <button
-                        onClick={() => handleDeleteChecklist(checklist.id)}
-                        className="text-muted hover:text-rose-500 p-1 rounded transition-colors"
-                        title="Delete checklist"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {!readOnly && (
+                        <button
+                          onClick={() => handleDeleteChecklist(checklist.id)}
+                          className="text-muted hover:text-rose-500 p-1 rounded transition-colors"
+                          title="Delete checklist"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
+
 
                     {/* Progress Bar */}
                     <div className="space-y-1.5">
@@ -639,14 +659,15 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                           key={item.id}
                           className="group flex items-center justify-between p-1.5 hover:bg-background rounded-lg transition-colors"
                         >
-                          <label className="flex items-center gap-2.5 text-xs text-text cursor-pointer flex-1">
+                          <label className="flex items-center gap-2.5 text-xs text-text flex-1">
                             <input
                               type="checkbox"
+                              disabled={readOnly}
                               checked={draftChecklistItems[item.id] ?? item.completed}
                               onChange={() =>
-                                handleToggleChecklistItem(item.id, draftChecklistItems[item.id] ?? item.completed)
+                                !readOnly && handleToggleChecklistItem(item.id, draftChecklistItems[item.id] ?? item.completed)
                               }
-                              className="rounded border-border text-primary focus:ring-primary w-4 h-4"
+                              className={`rounded border-border text-primary focus:ring-primary w-4 h-4 ${readOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                             />
                             <span
                               className={
@@ -659,65 +680,69 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                             </span>
                           </label>
 
-                          <button
-                            onClick={() => handleDeleteChecklistItem(item.id)}
-                            className="opacity-0 group-hover:opacity-100 p-1 text-muted hover:text-rose-500 rounded transition-opacity"
-                            title="Delete item"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                          {!readOnly && (
+                            <button
+                              onClick={() => handleDeleteChecklistItem(item.id)}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-muted hover:text-rose-500 rounded transition-opacity"
+                              title="Delete item"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
 
                     {/* Add Item to Checklist */}
-                    {activeChecklistId === checklist.id ? (
-                      <div className="space-y-2 pt-1">
-                        <input
-                          type="text"
-                          placeholder="Add an item..."
-                          value={newItemTitles[checklist.id] || ''}
-                          onChange={(e) =>
-                            setNewItemTitles({
-                              ...newItemTitles,
-                              [checklist.id]: e.target.value,
-                            })
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleAddChecklistItem(checklist.id);
-                            if (e.key === 'Escape') setActiveChecklistId(null);
-                          }}
-                          className="w-full text-xs bg-background border border-border rounded-lg p-2 text-text focus:outline-none focus:ring-1 focus:ring-primary"
-                          autoFocus
-                        />
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            className="h-7 text-xs"
-                            onClick={() => handleAddChecklistItem(checklist.id)}
-                            disabled={!newItemTitles[checklist.id]?.trim()}
-                          >
-                            Add
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs"
-                            onClick={() => setActiveChecklistId(null)}
-                          >
-                            Cancel
-                          </Button>
+                    {!readOnly && (
+                      activeChecklistId === checklist.id ? (
+                        <div className="space-y-2 pt-1">
+                          <input
+                            type="text"
+                            placeholder="Add an item..."
+                            value={newItemTitles[checklist.id] || ''}
+                            onChange={(e) =>
+                              setNewItemTitles({
+                                ...newItemTitles,
+                                [checklist.id]: e.target.value,
+                              })
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleAddChecklistItem(checklist.id);
+                              if (e.key === 'Escape') setActiveChecklistId(null);
+                            }}
+                            className="w-full text-xs bg-background border border-border rounded-lg p-2 text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                            autoFocus
+                          />
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              className="h-7 text-xs"
+                              onClick={() => handleAddChecklistItem(checklist.id)}
+                              disabled={!newItemTitles[checklist.id]?.trim()}
+                            >
+                              Add
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs"
+                              onClick={() => setActiveChecklistId(null)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setActiveChecklistId(checklist.id)}
-                        className="flex items-center gap-1.5 text-xs text-muted hover:text-text px-2 py-1 rounded-md hover:bg-background transition-colors"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        Add an item
-                      </button>
+                      ) : (
+                        <button
+                          onClick={() => setActiveChecklistId(checklist.id)}
+                          className="flex items-center gap-1.5 text-xs text-muted hover:text-text px-2 py-1 rounded-md hover:bg-background transition-colors"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Add an item
+                        </button>
+                      )
                     )}
                   </div>
                 );
@@ -732,18 +757,20 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                   Attachments ({taskData?.attachments?.length || 0})
                 </h3>
 
-                <label className="cursor-pointer">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-                  <span className="text-xs font-semibold text-primary hover:underline flex items-center gap-1">
-                    <Plus className="w-3.5 h-3.5" />
-                    Upload File
-                  </span>
-                </label>
+                {!readOnly && (
+                  <label className="cursor-pointer">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                    />
+                    <span className="text-xs font-semibold text-primary hover:underline flex items-center gap-1">
+                      <Plus className="w-3.5 h-3.5" />
+                      Upload File
+                    </span>
+                  </label>
+                )}
               </div>
 
               {taskData?.attachments && taskData.attachments.length > 0 ? (
@@ -776,13 +803,15 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                         >
                           <Download className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={() => handleDeleteAttachment(att.id)}
-                          className="p-1 text-muted hover:text-rose-500 rounded"
-                          title="Delete attachment"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {!readOnly && (
+                          <button
+                            onClick={() => handleDeleteAttachment(att.id)}
+                            className="p-1 text-muted hover:text-rose-500 rounded"
+                            title="Delete attachment"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -802,33 +831,40 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
               </h3>
 
               {/* Comment Input */}
-              <form onSubmit={handleAddComment} className="flex gap-3">
-                <Avatar
-                  name={currentUser?.name || 'User'}
-                  src={currentUser?.avatar}
-                  size="sm"
-                />
-                <div className="flex-1 space-y-2">
-                  <textarea
-                    rows={2}
-                    placeholder="Write a comment..."
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    className="w-full text-xs bg-background border border-border rounded-xl p-2.5 text-text focus:outline-none focus:ring-1 focus:ring-primary"
+              {!readOnly ? (
+                <form onSubmit={handleAddComment} className="flex gap-3">
+                  <Avatar
+                    name={currentUser?.name || 'User'}
+                    src={currentUser?.avatar}
+                    size="sm"
                   />
-                  <div className="flex justify-end">
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      size="sm"
-                      disabled={!newComment.trim() || addComment.isPending}
-                    >
-                      <Send className="w-3.5 h-3.5 mr-1" />
-                      Comment
-                    </Button>
+                  <div className="flex-1 space-y-2">
+                    <textarea
+                      rows={2}
+                      placeholder="Write a comment..."
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      className="w-full text-xs bg-background border border-border rounded-xl p-2.5 text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <div className="flex justify-end">
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="sm"
+                        disabled={!newComment.trim() || addComment.isPending}
+                      >
+                        <Send className="w-3.5 h-3.5 mr-1" />
+                        Comment
+                      </Button>
+                    </div>
                   </div>
+                </form>
+              ) : (
+                <div className="p-3 bg-background/50 border border-dashed border-border rounded-xl text-center">
+                  <p className="text-xs text-muted">Viewers have read-only access to discussions.</p>
                 </div>
-              </form>
+              )}
+
 
               {/* Comments Feed */}
               <div className="space-y-3 pt-2">
@@ -863,290 +899,319 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Right Sidebar (Trello Quick Action Buttons) */}
+          {/* Right Sidebar (Trello Quick Action Buttons / Read-only Info) */}
           <div className="space-y-6">
-            {/* Task tools section */}
-            <div className="space-y-2.5">
-              <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                Task tools
-              </h4>
+            {!readOnly ? (
+              <>
+                {/* Task tools section */}
+                <div className="space-y-2.5">
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                    Task tools
+                  </h4>
 
-              {/* Members Button & Popover */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowMemberPicker(!showMemberPicker)}
-                  className="w-full flex items-center gap-2 px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors"
-                >
-                  <UserPlus className="w-3.5 h-3.5 text-muted" />
-                  Assign members
-                </button>
+                  {/* Members Button & Popover */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowMemberPicker(!showMemberPicker)}
+                      className="w-full flex items-center gap-2 px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors"
+                    >
+                      <UserPlus className="w-3.5 h-3.5 text-muted" />
+                      Assign members
+                    </button>
 
-                {showMemberPicker && (
-                  <div className="absolute right-0 top-10 z-40 w-56 bg-surface border border-border rounded-xl shadow-xl p-3 space-y-2 animate-in fade-in zoom-in-95 duration-100">
-                    <div className="flex items-center justify-between border-b border-border pb-1.5">
-                      <span className="text-xs font-bold text-text">Members</span>
-                      <button
-                        onClick={() => setShowMemberPicker(false)}
-                        className="text-muted hover:text-text"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    <div className="space-y-1 max-h-48 overflow-y-auto">
-                      {members.map((m) => {
-                        const memberId = m.user_id ?? m.pivot?.user_id ?? m.id;
-                        const memberName = m.user?.name ?? m.name ?? 'User';
-                        const memberAvatar = m.user?.avatar ?? m.avatar;
-                        const isSelected = draftAssigneeIds.includes(memberId);
-                        return (
+                    {showMemberPicker && (
+                      <div className="absolute right-0 top-10 z-40 w-56 bg-surface border border-border rounded-xl shadow-xl p-3 space-y-2 animate-in fade-in zoom-in-95 duration-100">
+                        <div className="flex items-center justify-between border-b border-border pb-1.5">
+                          <span className="text-xs font-bold text-text">Members</span>
                           <button
-                            key={m.id}
-                            onClick={() => handleToggleMember(memberId)}
-                            className="w-full flex items-center justify-between p-1.5 hover:bg-background rounded-lg text-xs transition-colors"
+                            onClick={() => setShowMemberPicker(false)}
+                            className="text-muted hover:text-text"
                           >
-                            <div className="flex items-center gap-2 truncate">
-                              <Avatar
-                                name={memberName}
-                                src={memberAvatar}
-                                size="xs"
-                              />
-                              <span className="truncate">{memberName}</span>
-                            </div>
-                            {isSelected && (
-                              <Check className="w-3.5 h-3.5 text-primary shrink-0" />
-                            )}
+                            <X className="w-3.5 h-3.5" />
                           </button>
-                        );
-                      })}
-                    </div>
+                        </div>
+
+                        <div className="space-y-1 max-h-48 overflow-y-auto">
+                          {members.map((m) => {
+                            const memberId = m.user_id ?? m.pivot?.user_id ?? m.id;
+                            const memberName = m.user?.name ?? m.name ?? 'User';
+                            const memberAvatar = m.user?.avatar ?? m.avatar;
+                            const isSelected = draftAssigneeIds.includes(memberId);
+                            return (
+                              <button
+                                key={m.id}
+                                onClick={() => handleToggleMember(memberId)}
+                                className="w-full flex items-center justify-between p-1.5 hover:bg-background rounded-lg text-xs transition-colors"
+                              >
+                                <div className="flex items-center gap-2 truncate">
+                                  <Avatar
+                                    name={memberName}
+                                    src={memberAvatar}
+                                    size="xs"
+                                  />
+                                  <span className="truncate">{memberName}</span>
+                                </div>
+                                {isSelected && (
+                                  <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {/* Labels Button & Popover */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowLabelPicker(!showLabelPicker)}
-                  className="w-full flex items-center gap-2 px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors"
-                >
-                  <Tag className="w-3.5 h-3.5 text-muted" />
-                  Add labels
-                </button>
+                  {/* Labels Button & Popover */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowLabelPicker(!showLabelPicker)}
+                      className="w-full flex items-center gap-2 px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors"
+                    >
+                      <Tag className="w-3.5 h-3.5 text-muted" />
+                      Add labels
+                    </button>
 
-                {showLabelPicker && (
-                  <div className="absolute right-0 top-10 z-40 w-56 bg-surface border border-border rounded-xl shadow-xl p-3 space-y-2 animate-in fade-in zoom-in-95 duration-100">
-                    <div className="flex items-center justify-between border-b border-border pb-1.5">
-                      <span className="text-xs font-bold text-text">Labels</span>
-                      <button
-                        onClick={() => setShowLabelPicker(false)}
-                        className="text-muted hover:text-text"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                      {projectLabels.map((lbl) => {
-                        const isAttached = draftLabelIds.includes(lbl.id);
-                        return (
+                    {showLabelPicker && (
+                      <div className="absolute right-0 top-10 z-40 w-56 bg-surface border border-border rounded-xl shadow-xl p-3 space-y-2 animate-in fade-in zoom-in-95 duration-100">
+                        <div className="flex items-center justify-between border-b border-border pb-1.5">
+                          <span className="text-xs font-bold text-text">Labels</span>
                           <button
-                            key={lbl.id}
-                            onClick={() => handleToggleLabel(lbl.id)}
-                            className="w-full flex items-center justify-between px-2.5 py-1 rounded-lg text-xs font-semibold text-white transition-transform hover:scale-102"
-                            style={{ backgroundColor: lbl.color || '#6366F1' }}
+                            onClick={() => setShowLabelPicker(false)}
+                            className="text-muted hover:text-text"
                           >
-                            <span>{lbl.name}</span>
-                            {isAttached && <Check className="w-3.5 h-3.5 text-white" />}
+                            <X className="w-3.5 h-3.5" />
                           </button>
-                        );
-                      })}
+                        </div>
 
-                      {projectLabels.length === 0 && (
-                        <p className="text-[11px] text-muted text-center py-2">
-                          No labels yet. Create one below.
-                        </p>
-                      )}
-                    </div>
+                        <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                          {projectLabels.map((lbl) => {
+                            const isAttached = draftLabelIds.includes(lbl.id);
+                            return (
+                              <button
+                                key={lbl.id}
+                                onClick={() => handleToggleLabel(lbl.id)}
+                                className="w-full flex items-center justify-between px-2.5 py-1 rounded-lg text-xs font-semibold text-white transition-transform hover:scale-102"
+                                style={{ backgroundColor: lbl.color || '#6366F1' }}
+                              >
+                                <span>{lbl.name}</span>
+                                {isAttached && <Check className="w-3.5 h-3.5 text-white" />}
+                              </button>
+                            );
+                          })}
 
-                    {!showLabelCreator ? (
-                      <button
-                        type="button"
-                        onClick={() => setShowLabelCreator(true)}
-                        className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 rounded-lg"
+                          {projectLabels.length === 0 && (
+                            <p className="text-[11px] text-muted text-center py-2">
+                              No labels yet. Create one below.
+                            </p>
+                          )}
+                        </div>
+
+                        {!showLabelCreator ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowLabelCreator(true)}
+                            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 rounded-lg"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Create label
+                          </button>
+                        ) : (
+                          <form onSubmit={handleCreateLabel} className="border-t border-border pt-2 space-y-2">
+                            <input
+                              value={newLabelName}
+                              onChange={(event) => setNewLabelName(event.target.value)}
+                              placeholder="Label name"
+                              className="w-full text-xs bg-background border border-border rounded-lg p-2 text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                              autoFocus
+                            />
+                            <div className="flex items-center gap-2">
+                              <input type="color" value={newLabelColor} onChange={(event) => setNewLabelColor(event.target.value)} className="w-8 h-8 rounded cursor-pointer" title="Label color" />
+                              <Button type="submit" size="sm" className="flex-1 text-xs h-8" disabled={!newLabelName.trim()} isLoading={createProjectLabel.isPending}>
+                                Save label
+                              </Button>
+                            </div>
+                          </form>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Checklist Creator Button */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowChecklistCreator(!showChecklistCreator)}
+                      className="w-full flex items-center gap-2 px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors"
+                    >
+                      <CheckSquare className="w-3.5 h-3.5 text-muted" />
+                      Create checklist
+                    </button>
+
+                    {showChecklistCreator && (
+                      <form
+                        onSubmit={handleCreateChecklist}
+                        className="absolute right-0 top-10 z-40 w-56 bg-surface border border-border rounded-xl shadow-xl p-3 space-y-2 animate-in fade-in zoom-in-95 duration-100"
                       >
-                        <Plus className="w-3.5 h-3.5" />
-                        Create label
-                      </button>
-                    ) : (
-                      <form onSubmit={handleCreateLabel} className="border-t border-border pt-2 space-y-2">
+                        <div className="flex items-center justify-between border-b border-border pb-1.5">
+                          <span className="text-xs font-bold text-text">Add Checklist</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowChecklistCreator(false)}
+                            className="text-muted hover:text-text"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
                         <input
-                          value={newLabelName}
-                          onChange={(event) => setNewLabelName(event.target.value)}
-                          placeholder="Label name"
+                          type="text"
+                          value={newChecklistName}
+                          onChange={(e) => setNewChecklistName(e.target.value)}
+                          placeholder="Checklist title..."
                           className="w-full text-xs bg-background border border-border rounded-lg p-2 text-text focus:outline-none focus:ring-1 focus:ring-primary"
                           autoFocus
                         />
-                        <div className="flex items-center gap-2">
-                          <input type="color" value={newLabelColor} onChange={(event) => setNewLabelColor(event.target.value)} className="w-8 h-8 rounded cursor-pointer" title="Label color" />
-                          <Button type="submit" size="sm" className="flex-1 text-xs h-8" disabled={!newLabelName.trim()} isLoading={createProjectLabel.isPending}>
-                            Save label
-                          </Button>
-                        </div>
+
+                        <Button
+                          type="submit"
+                          variant="primary"
+                          size="sm"
+                          className="w-full text-xs h-7"
+                        >
+                          Add Checklist
+                        </Button>
                       </form>
                     )}
                   </div>
-                )}
-              </div>
 
-              {/* Checklist Creator Button */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowChecklistCreator(!showChecklistCreator)}
-                  className="w-full flex items-center gap-2 px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors"
-                >
-                  <CheckSquare className="w-3.5 h-3.5 text-muted" />
-                  Create checklist
-                </button>
-
-                {showChecklistCreator && (
-                  <form
-                    onSubmit={handleCreateChecklist}
-                    className="absolute right-0 top-10 z-40 w-56 bg-surface border border-border rounded-xl shadow-xl p-3 space-y-2 animate-in fade-in zoom-in-95 duration-100"
-                  >
-                    <div className="flex items-center justify-between border-b border-border pb-1.5">
-                      <span className="text-xs font-bold text-text">Add Checklist</span>
-                      <button
-                        type="button"
-                        onClick={() => setShowChecklistCreator(false)}
-                        className="text-muted hover:text-text"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    <input
-                      type="text"
-                      value={newChecklistName}
-                      onChange={(e) => setNewChecklistName(e.target.value)}
-                      placeholder="Checklist title..."
-                      className="w-full text-xs bg-background border border-border rounded-lg p-2 text-text focus:outline-none focus:ring-1 focus:ring-primary"
-                      autoFocus
-                    />
-
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      size="sm"
-                      className="w-full text-xs h-7"
+                  {/* Dates Picker Button */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowDatesPicker(!showDatesPicker)}
+                      className="w-full flex items-center gap-2 px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors"
                     >
-                      Add Checklist
-                    </Button>
-                  </form>
-                )}
-              </div>
+                      <Calendar className="w-3.5 h-3.5 text-muted" />
+                      Set deadline
+                    </button>
 
-              {/* Dates Picker Button */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowDatesPicker(!showDatesPicker)}
-                  className="w-full flex items-center gap-2 px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors"
-                >
-                  <Calendar className="w-3.5 h-3.5 text-muted" />
-                  Set deadline
-                </button>
+                    {showDatesPicker && (
+                      <div className="absolute right-0 top-10 z-40 w-60 bg-surface border border-border rounded-xl shadow-xl p-3 space-y-2.5 animate-in fade-in zoom-in-95 duration-100">
+                        <div className="flex items-center justify-between border-b border-border pb-1.5">
+                          <span className="text-xs font-bold text-text">Due Date</span>
+                          <button
+                            onClick={() => setShowDatesPicker(false)}
+                            className="text-muted hover:text-text"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
 
-                {showDatesPicker && (
-                  <div className="absolute right-0 top-10 z-40 w-60 bg-surface border border-border rounded-xl shadow-xl p-3 space-y-2.5 animate-in fade-in zoom-in-95 duration-100">
-                    <div className="flex items-center justify-between border-b border-border pb-1.5">
-                      <span className="text-xs font-bold text-text">Due Date</span>
-                      <button
-                        onClick={() => setShowDatesPicker(false)}
-                        className="text-muted hover:text-text"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                        <input
+                          type="date"
+                          value={dueDate}
+                          onChange={(e) => handleDueDateChange(e.target.value)}
+                          className="w-full text-xs bg-background border border-border rounded-lg p-2 text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
 
-                    <input
-                      type="date"
-                      value={dueDate}
-                      onChange={(e) => handleDueDateChange(e.target.value)}
-                      className="w-full text-xs bg-background border border-border rounded-lg p-2 text-text focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-
-                    {dueDate && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="w-full text-xs text-rose-500 h-7"
-                        onClick={() => handleDueDateChange('')}
-                      >
-                        Remove date
-                      </Button>
+                        {dueDate && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-full text-xs text-rose-500 h-7"
+                            onClick={() => handleDueDateChange('')}
+                          >
+                            Remove date
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
+
+                  {/* Attachment File Input Button */}
+                  <div>
+                    <label className="cursor-pointer w-full flex items-center gap-2 px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors">
+                      <Paperclip className="w-3.5 h-3.5 text-muted" />
+                      Upload file
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.jpg,.jpeg,.png,.webp,.zip"
+                        className="hidden"
+                        onChange={handleFileUpload}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Actions section */}
+                <div className="space-y-2.5 border-t border-border pt-4">
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                    Actions
+                  </h4>
+
+                  {/* Priority Select */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-muted">
+                      Priority
+                    </label>
+                    <select
+                      value={draftPriority}
+                      onChange={(e) => handlePriorityChange(e.target.value as Priority)}
+                      className="w-full text-xs bg-background border border-border rounded-xl p-2 text-text focus:outline-none"
+                    >
+                      <option value="urgent">Urgent</option>
+                      <option value="high">High</option>
+                      <option value="medium">Medium</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button type="button" variant="primary" size="sm" onClick={handleSaveMetadata}>
+                      Save changes
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={handleCancelMetadata}>
+                      Cancel
+                    </Button>
+                  </div>
+
+                  {/* Delete Card Button */}
+                  <button
+                    onClick={handleDeleteTask}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-rose-500 hover:bg-rose-500/10 border border-rose-500/20 rounded-xl transition-colors mt-4"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete card
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-3 bg-background/50 border border-border p-4 rounded-2xl">
+                <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                  Task Info
+                </h4>
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <span className="text-[10px] uppercase font-semibold text-muted block mb-1">Priority</span>
+                    <Badge variant={taskData?.priority === 'urgent' ? 'error' : taskData?.priority === 'high' ? 'warning' : 'neutral'} size="sm">
+                      {taskData?.priority || 'medium'}
+                    </Badge>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-semibold text-muted block mb-1">Status</span>
+                    <span className="font-semibold text-text">{currentStatus?.name || '—'}</span>
+                  </div>
+                  {taskData?.due_date && (
+                    <div>
+                      <span className="text-[10px] uppercase font-semibold text-muted block mb-1">Due Date</span>
+                      <span className="font-medium text-text">{new Date(taskData.due_date).toLocaleDateString()}</span>
+                    </div>
+                  )}
+                </div>
               </div>
-
-              {/* Attachment File Input Button */}
-              <div>
-                <label className="cursor-pointer w-full flex items-center gap-2 px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors">
-                  <Paperclip className="w-3.5 h-3.5 text-muted" />
-                  Upload file
-                  <input
-                    type="file"
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.jpg,.jpeg,.png,.webp,.zip"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-                </label>
-              </div>
-            </div>
-
-            {/* Actions section */}
-            <div className="space-y-2.5 border-t border-border pt-4">
-              <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                Actions
-              </h4>
-
-              {/* Priority Select */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-semibold text-muted">
-                  Priority
-                </label>
-                <select
-                  value={draftPriority}
-                  onChange={(e) => handlePriorityChange(e.target.value as Priority)}
-                  className="w-full text-xs bg-background border border-border rounded-xl p-2 text-text focus:outline-none"
-                >
-                  <option value="urgent">Urgent</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <Button type="button" variant="primary" size="sm" onClick={handleSaveMetadata}>
-                  Save changes
-                </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={handleCancelMetadata}>
-                  Cancel
-                </Button>
-              </div>
-
-              {/* Delete Card Button */}
-              <button
-                onClick={handleDeleteTask}
-                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-rose-500 hover:bg-rose-500/10 border border-rose-500/20 rounded-xl transition-colors mt-4"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Delete card
-              </button>
-            </div>
+            )}
           </div>
+
         </div>
       </div>
     </div>

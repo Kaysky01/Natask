@@ -125,9 +125,10 @@ export const ProjectsPage: React.FC = () => {
                   <div className="flex items-center justify-between pt-1">
                     <div className="flex -space-x-1.5 overflow-hidden">
                       {project.members?.map((m) => (
-                        <Avatar key={m.id} name={m.user?.name || 'User'} src={m.user?.avatar} size="xs" />
+                        <Avatar key={m.id} name={m.user?.name ?? m.name ?? 'User'} src={m.user?.avatar ?? m.avatar} size="xs" />
                       ))}
                     </div>
+
 
                     <span className="text-[11px] font-medium text-primary flex items-center gap-1 group-hover:underline">
                       Open Board →

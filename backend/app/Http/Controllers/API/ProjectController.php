@@ -208,7 +208,7 @@ class ProjectController extends Controller
      */
     public function destroy(Request $request, Project $project): JsonResponse
     {
-        $this->authorizeAdmin($request->user(), $project);
+        $this->authorizeOwner($request->user(), $project);
 
         DB::transaction(function () use ($project) {
             // Tasks must be removed before statuses because task.status_id is restrictive.
@@ -222,6 +222,7 @@ class ProjectController extends Controller
             'message' => 'Project deleted successfully',
         ]);
     }
+
 
     /**
      * List members of a project.
@@ -245,16 +246,19 @@ class ProjectController extends Controller
     {
         $this->authorizeAdmin($request->user(), $project);
 
+        $isOwner = $project->owner_id === $request->user()->id;
+        $allowedRoles = $isOwner ? 'in:admin,member,viewer' : 'in:member,viewer';
+
         $validator = Validator::make($request->all(), [
             'email' => 'required_without:user_id|email',
             'user_id' => 'required_without:email|exists:users,id',
-            'role' => 'sometimes|in:admin,member,viewer',
+            'role' => 'sometimes|' . $allowedRoles,
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Validation error',
+                'message' => $isOwner ? 'Validation error' : 'Admins can only invite members or viewers',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -304,8 +308,8 @@ class ProjectController extends Controller
     {
         $this->authorizeMember($request->user(), $project);
 
-        $canInviteAdmin = $project->owner_id === $request->user()->id
-            || $project->getMemberRole($request->user()) === 'admin';
+        $isOwner = $project->owner_id === $request->user()->id;
+        $canInviteAdmin = $isOwner;
         $allowedRoles = $canInviteAdmin ? ['admin', 'member', 'viewer'] : ['member', 'viewer'];
 
         $validator = Validator::make($request->all(), [
@@ -342,19 +346,57 @@ class ProjectController extends Controller
     }
 
     /**
+     * Preview an invitation link.
+     */
+    public function previewInvitation(string $token): JsonResponse
+    {
+        $tokenHash = hash('sha256', $token);
+        $invitation = ProjectInvitation::with(['project.owner:id,name,email,avatar', 'inviter:id,name,email,avatar'])
+            ->where('token_hash', $tokenHash)
+            ->whereNull('accepted_at')
+            ->where('expires_at', '>', now())
+            ->first();
+
+        if (!$invitation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invitation link is invalid or has expired',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'project' => [
+                    'id' => $invitation->project->id,
+                    'name' => $invitation->project->name,
+                    'description' => $invitation->project->description,
+                    'owner' => $invitation->project->owner,
+                ],
+                'inviter' => $invitation->inviter,
+                'role' => $invitation->role,
+                'expires_at' => $invitation->expires_at,
+            ],
+        ]);
+    }
+
+    /**
      * Accept a project invitation link for the authenticated user.
      */
     public function acceptInvitation(Request $request, string $token): JsonResponse
     {
+        $tokenHash = hash('sha256', $token);
         $invitation = ProjectInvitation::with('project')
-            ->where('token_hash', hash('sha256', $token))
+            ->where('token_hash', $tokenHash)
+            ->whereNull('accepted_at')
+            ->where('expires_at', '>', now())
             ->first();
 
-        if (!$invitation || $invitation->accepted_at || $invitation->revoked_at || $invitation->expires_at->isPast()) {
+        if (!$invitation) {
             return response()->json([
                 'success' => false,
-                'message' => 'This invitation link is invalid or has expired',
-            ], 410);
+                'message' => 'Invitation link is invalid or has expired',
+            ], 404);
         }
 
         $project = $invitation->project;
@@ -389,16 +431,19 @@ class ProjectController extends Controller
      */
     public function updateMemberRole(Request $request, Project $project, User $user): JsonResponse
     {
-        $this->authorizeOwner($request->user(), $project);
+        $this->authorizeAdmin($request->user(), $project);
+
+        $currentUser = $request->user();
+        $isOwner = $project->owner_id === $currentUser->id;
 
         $validator = Validator::make($request->all(), [
-            'role' => 'required|in:admin,member,viewer',
+            'role' => 'required|' . ($isOwner ? 'in:admin,member,viewer' : 'in:member,viewer'),
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Validation error',
+                'message' => $isOwner ? 'Validation error' : 'Admins can only change roles to member or viewer',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -410,11 +455,20 @@ class ProjectController extends Controller
             ], 400);
         }
 
-        if (!$project->members()->where('user_id', $user->id)->exists()) {
+        $targetMember = $project->members()->where('user_id', $user->id)->first();
+        if (!$targetMember) {
             return response()->json([
                 'success' => false,
                 'message' => 'User is not a member of this project',
             ], 404);
+        }
+
+        // If caller is Admin (not owner), they cannot modify role of fellow Admin
+        if (!$isOwner && $targetMember->pivot->role === 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only the project owner can modify admin roles',
+            ], 403);
         }
 
         $project->members()->updateExistingPivot($user->id, ['role' => $request->role]);
@@ -432,6 +486,9 @@ class ProjectController extends Controller
     {
         $this->authorizeAdmin($request->user(), $project);
 
+        $currentUser = $request->user();
+        $isOwner = $project->owner_id === $currentUser->id;
+
         if ($project->owner_id === $user->id) {
             return response()->json([
                 'success' => false,
@@ -439,11 +496,27 @@ class ProjectController extends Controller
             ], 400);
         }
 
+        $targetMember = $project->members()->where('user_id', $user->id)->first();
+        if (!$targetMember) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User is not a member of this project',
+            ], 404);
+        }
+
+        // If caller is Admin (not owner), they cannot kick fellow Admin
+        if (!$isOwner && $targetMember->pivot->role === 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only the project owner can remove admins',
+            ], 403);
+        }
+
         $project->members()->detach($user->id);
 
         Activity::log('member_removed', $project, $request->user(), [
-            'member_id' => $user->id,
-            'member_name' => $user->name,
+            'removed_user_id' => $user->id,
+            'removed_user_name' => $user->name,
         ]);
         ProjectChanged::dispatch($project, 'member.removed');
 
@@ -452,6 +525,7 @@ class ProjectController extends Controller
             'message' => 'Member removed successfully',
         ]);
     }
+
 
     /**
      * List labels for a project.
@@ -731,7 +805,7 @@ class ProjectController extends Controller
 
     protected function authorizeAdmin(User $user, Project $project): void
     {
-        if ($project->owner_id === $user->id) {
+        if ((int) $project->owner_id === (int) $user->id) {
             return;
         }
 
@@ -743,7 +817,7 @@ class ProjectController extends Controller
 
     protected function authorizeOwner(User $user, Project $project): void
     {
-        if ($project->owner_id !== $user->id) {
+        if ((int) $project->owner_id !== (int) $user->id) {
             abort(403, 'Only the project owner can perform this action');
         }
     }

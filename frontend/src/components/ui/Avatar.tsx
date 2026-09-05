@@ -26,12 +26,26 @@ export const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
 
     const imageSource = React.useMemo(() => {
       if (!src) return undefined;
-      if (/^https?:\/\//i.test(src)) return src;
 
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
       const apiOrigin = new URL(apiUrl, window.location.origin).origin;
+
+      if (/^https?:\/\//i.test(src)) {
+        try {
+          const parsed = new URL(src);
+          // If the backend generated an avatar URL using APP_URL without port (e.g. http://localhost/storage/...)
+          if ((parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') && parsed.pathname.startsWith('/storage/')) {
+            return `${apiOrigin}${parsed.pathname}`;
+          }
+          return src;
+        } catch {
+          return src;
+        }
+      }
+
       return `${apiOrigin}${src.startsWith('/') ? src : `/${src}`}`;
     }, [src]);
+
 
     const handleImageError = () => {
       setImageError(true);

@@ -180,5 +180,278 @@ class NaTaskApiTest extends TestCase
                 ],
             ]);
     }
+
+    public function test_google_callback_creates_new_user_with_avatar(): void
+    {
+        $email = 'new_google_' . uniqid() . '@natask.com';
+        $abstractUser = \Mockery::mock(\Laravel\Socialite\Two\User::class);
+        $abstractUser->shouldReceive('getId')->andReturn('google_unique_' . uniqid());
+        $abstractUser->shouldReceive('getEmail')->andReturn($email);
+        $abstractUser->shouldReceive('getName')->andReturn('Google Test User');
+        $abstractUser->shouldReceive('getNickname')->andReturn(null);
+        $abstractUser->shouldReceive('getAvatar')->andReturn('https://lh3.googleusercontent.com/a/new-avatar-url');
+
+        $provider = \Mockery::mock(\Laravel\Socialite\Contracts\Provider::class);
+        $provider->shouldReceive('stateless')->andReturnSelf();
+        $provider->shouldReceive('user')->andReturn($abstractUser);
+
+        \Laravel\Socialite\Facades\Socialite::shouldReceive('driver')->with('google')->andReturn($provider);
+
+        $response = $this->get('/api/auth/google/callback');
+
+        $response->assertStatus(302);
+        $location = $response->headers->get('Location');
+        $this->assertStringContainsString('/auth/callback?token=', $location);
+
+        $user = User::where('email', $email)->first();
+        $this->assertNotNull($user);
+        $this->assertEquals('Google Test User', $user->name);
+        $this->assertEquals('https://lh3.googleusercontent.com/a/new-avatar-url', $user->avatar);
+        $this->assertNotNull($user->email_verified_at);
+    }
+
+    public function test_google_callback_updates_existing_user_avatar_and_google_id(): void
+    {
+        $email = 'existing_oauth_' . uniqid() . '@natask.com';
+        $googleId = 'google_existing_' . uniqid();
+
+        $existing = User::create([
+            'name' => 'Existing User',
+            'email' => $email,
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+
+        $abstractUser = \Mockery::mock(\Laravel\Socialite\Two\User::class);
+        $abstractUser->shouldReceive('getId')->andReturn($googleId);
+        $abstractUser->shouldReceive('getEmail')->andReturn($email);
+        $abstractUser->shouldReceive('getName')->andReturn('Existing User Updated');
+        $abstractUser->shouldReceive('getNickname')->andReturn(null);
+        $abstractUser->shouldReceive('getAvatar')->andReturn('https://lh3.googleusercontent.com/a/updated-avatar');
+
+        $provider = \Mockery::mock(\Laravel\Socialite\Contracts\Provider::class);
+        $provider->shouldReceive('stateless')->andReturnSelf();
+        $provider->shouldReceive('user')->andReturn($abstractUser);
+
+        \Laravel\Socialite\Facades\Socialite::shouldReceive('driver')->with('google')->andReturn($provider);
+
+        $response = $this->get('/api/auth/google/callback');
+
+        $response->assertStatus(302);
+        $this->assertStringContainsString('/auth/callback?token=', $response->headers->get('Location'));
+
+        $fresh = $existing->fresh();
+        $this->assertEquals($googleId, $fresh->google_id);
+        $this->assertEquals('https://lh3.googleusercontent.com/a/updated-avatar', $fresh->avatar);
+    }
+
+
+    public function test_authenticated_user_can_upload_avatar(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        $user = User::where('email', 'admin@natask.com')->first();
+        $token = $user->createToken('test_avatar')->plainTextToken;
+
+        $file = \Illuminate\Http\UploadedFile::fake()->image('profile.jpg', 200, 200);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/auth/avatar', [
+                'avatar' => $file,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Avatar updated successfully',
+            ]);
+
+        $freshUser = $user->fresh();
+        $this->assertNotNull($freshUser->avatar);
+        $this->assertStringContainsString('avatars/' . $user->id, $freshUser->avatar);
+    }
+
+    public function test_owner_can_delete_project_but_admin_cannot(): void
+    {
+        $owner = User::create([
+            'name' => 'Project Owner',
+            'email' => 'owner_' . uniqid() . '@natask.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+        $admin = User::create([
+            'name' => 'Project Admin',
+            'email' => 'admin_' . uniqid() . '@natask.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+
+        $project = Project::create([
+            'name' => 'Permission Test Project ' . uniqid(),
+            'owner_id' => $owner->id,
+            'status' => 'active',
+            'priority' => 'medium',
+        ]);
+        $project->createDefaultStatuses();
+        $project->members()->attach($admin->id, ['role' => 'admin']);
+
+        $adminToken = $admin->createToken('admin_token')->plainTextToken;
+        $ownerToken = $owner->createToken('owner_token')->plainTextToken;
+
+        // Admin attempts to delete project -> 403 Forbidden
+        $responseAdmin = $this->actingAs($admin, 'sanctum')
+            ->deleteJson("/api/projects/{$project->id}");
+        $responseAdmin->assertStatus(403);
+
+        // Owner deletes project -> 200 OK
+        $responseOwner = $this->actingAs($owner, 'sanctum')
+            ->deleteJson("/api/projects/{$project->id}");
+        $responseOwner->assertStatus(200);
+        $this->assertDatabaseMissing('projects', ['id' => $project->id]);
+    }
+
+    public function test_admin_role_limitations_on_managing_members(): void
+    {
+        $owner = User::create([
+            'name' => 'Owner User',
+            'email' => 'owner_' . uniqid() . '@natask.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+        $admin1 = User::create([
+            'name' => 'Admin One',
+            'email' => 'admin1_' . uniqid() . '@natask.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+        $admin2 = User::create([
+            'name' => 'Admin Two',
+            'email' => 'admin2_' . uniqid() . '@natask.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+        $member = User::create([
+            'name' => 'Member User',
+            'email' => 'member_' . uniqid() . '@natask.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+
+        $project = Project::create([
+            'name' => 'Admin Restrictions Project ' . uniqid(),
+            'owner_id' => $owner->id,
+            'status' => 'active',
+            'priority' => 'medium',
+        ]);
+        $project->createDefaultStatuses();
+        $project->members()->attach($admin1->id, ['role' => 'admin']);
+        $project->members()->attach($admin2->id, ['role' => 'admin']);
+        $project->members()->attach($member->id, ['role' => 'member']);
+
+        // Admin cannot promote member to admin (422)
+        $respPromote = $this->actingAs($admin1, 'sanctum')
+            ->putJson("/api/projects/{$project->id}/members/{$member->id}", [
+                'role' => 'admin',
+            ]);
+        $respPromote->assertStatus(422);
+
+        // Admin can change member to viewer (200)
+        $respDemote = $this->actingAs($admin1, 'sanctum')
+            ->putJson("/api/projects/{$project->id}/members/{$member->id}", [
+                'role' => 'viewer',
+            ]);
+        $respDemote->assertStatus(200);
+
+        // Admin cannot kick fellow Admin (403)
+        $respKickAdmin = $this->actingAs($admin1, 'sanctum')
+            ->deleteJson("/api/projects/{$project->id}/members/{$admin2->id}");
+        $respKickAdmin->assertStatus(403);
+
+        // Admin cannot kick Owner (400 or 403)
+        $respKickOwner = $this->actingAs($admin1, 'sanctum')
+            ->deleteJson("/api/projects/{$project->id}/members/{$owner->id}");
+        $respKickOwner->assertStatus(400);
+
+        // Owner CAN kick fellow Admin (200)
+        $respOwnerKickAdmin = $this->actingAs($owner, 'sanctum')
+            ->deleteJson("/api/projects/{$project->id}/members/{$admin2->id}");
+        $respOwnerKickAdmin->assertStatus(200);
+
+        // Owner CAN promote member/viewer to Admin (200)
+        $respOwnerPromote = $this->actingAs($owner, 'sanctum')
+            ->putJson("/api/projects/{$project->id}/members/{$member->id}", [
+                'role' => 'admin',
+            ]);
+        $respOwnerPromote->assertStatus(200);
+    }
+
+    public function test_viewer_has_strict_read_only_access(): void
+    {
+        $owner = User::create([
+            'name' => 'Owner',
+            'email' => 'owner_' . uniqid() . '@natask.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+        $viewer = User::create([
+            'name' => 'Viewer User',
+            'email' => 'viewer_' . uniqid() . '@natask.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+
+        $project = Project::create([
+            'name' => 'Viewer Test Project ' . uniqid(),
+            'owner_id' => $owner->id,
+            'status' => 'active',
+            'priority' => 'medium',
+        ]);
+        $project->createDefaultStatuses();
+        $status = $project->taskStatuses()->first();
+        $project->members()->attach($viewer->id, ['role' => 'viewer']);
+
+        $task = Task::create([
+            'project_id' => $project->id,
+            'status_id' => $status->id,
+            'creator_id' => $owner->id,
+            'title' => 'Initial Task',
+            'priority' => 'medium',
+        ]);
+
+        // Viewer can read project (200)
+        $respShow = $this->actingAs($viewer, 'sanctum')
+            ->getJson("/api/projects/{$project->id}");
+        $respShow->assertStatus(200);
+
+        // Viewer CANNOT create task (403)
+        $respCreateTask = $this->actingAs($viewer, 'sanctum')
+            ->postJson("/api/tasks", [
+                'project_id' => $project->id,
+                'title' => 'Viewer Created Task',
+                'status_id' => $status->id,
+                'priority' => 'medium',
+            ]);
+        $respCreateTask->assertStatus(403);
+
+        // Viewer CANNOT update task (403)
+        $respUpdateTask = $this->actingAs($viewer, 'sanctum')
+            ->putJson("/api/tasks/{$task->id}", [
+                'title' => 'Hacked title',
+            ]);
+        $respUpdateTask->assertStatus(403);
+
+        // Viewer CANNOT update task status (403)
+        $respStatus = $this->actingAs($viewer, 'sanctum')
+            ->putJson("/api/tasks/{$task->id}/status", [
+                'status_id' => $status->id,
+            ]);
+        $respStatus->assertStatus(403);
+
+        // Viewer CANNOT add comment (403)
+        $respComment = $this->actingAs($viewer, 'sanctum')
+            ->postJson("/api/tasks/{$task->id}/comments", [
+                'content' => 'Viewer comment',
+            ]);
+        $respComment->assertStatus(403);
+
+        // Viewer CANNOT delete task (403)
+        $respDeleteTask = $this->actingAs($viewer, 'sanctum')
+            ->deleteJson("/api/tasks/{$task->id}");
+        $respDeleteTask->assertStatus(403);
+    }
 }
+
+
+
 
