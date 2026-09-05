@@ -1,0 +1,29 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+backend/vendor/
+backend/node_modules/
+frontend/node_modules/
+
+# Build output and runtime files
+frontend/dist/
+backend/public/build/
+backend/public/hot
+backend/public/storage
+backend/storage/app/public/*
+backend/storage/framework/cache/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/logs/*.log
+backend/bootstrap/cache/*.php
+
+# Local tooling
+.vscode/
+.idea/
+*.log
+*.tmp
+Thumbs.db
+.DS_Store

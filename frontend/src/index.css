@@ -1,0 +1,112 @@
+/* Import Inter font from Google Fonts as fallback for Geist */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light theme */
+    --color-background: #F8F9FB;
+    --color-surface: #FFFFFF;
+    --color-text: #17181A;
+    --color-muted: #6B7280;
+    --color-border: #E5E7EB;
+    --color-primary: #ff7849;
+  }
+
+  .dark {
+    /* Dark theme — charcoal, not pure black */
+    --color-background: #1A1C1E;
+    --color-surface: #222426;
+    --color-text: #F3F4F6;
+    --color-muted: #9CA3AF;
+    --color-border: #374151;
+    --color-primary: #ff7849;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-feature-settings: 'cv11', 'ss01';
+    font-variation-settings: 'opsz' 32;
+  }
+
+  body {
+    @apply bg-background text-text font-sans;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+
+@layer components {
+  /* Button variants */
+  .btn-primary {
+    @apply bg-coral-500 hover:bg-coral-600 text-white px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-coral-500 focus:ring-opacity-50;
+  }
+
+  .btn-secondary {
+    @apply bg-surface border border-border hover:bg-gray-50 text-text px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-coral-500 focus:ring-opacity-50;
+  }
+
+  .btn-ghost {
+    @apply hover:bg-gray-100 text-text px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-coral-500 focus:ring-opacity-50;
+  }
+
+  /* Input styles */
+  .input {
+    @apply bg-surface border border-border rounded-lg px-3 py-2 text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-coral-500 focus:border-transparent;
+  }
+
+  /* Card styles */
+  .card {
+    @apply bg-surface border border-border rounded-lg p-6 shadow-sm;
+  }
+
+  .card-compact {
+    @apply bg-surface border border-border rounded-lg p-4 shadow-sm;
+  }
+
+  /* Focus styles */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-coral-500 focus:ring-opacity-50;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}
+
+/* Smooth animations */
+@media (prefers-reduced-motion: no-preference) {
+  * {
+    transition-duration: 150ms;
+    transition-timing-function: ease-out;
+  }
+}
