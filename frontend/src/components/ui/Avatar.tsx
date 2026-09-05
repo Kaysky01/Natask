@@ -20,6 +20,19 @@ export const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
 
     const [imageError, setImageError] = React.useState(false);
 
+    React.useEffect(() => {
+      setImageError(false);
+    }, [src]);
+
+    const imageSource = React.useMemo(() => {
+      if (!src) return undefined;
+      if (/^https?:\/\//i.test(src)) return src;
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+      const apiOrigin = new URL(apiUrl, window.location.origin).origin;
+      return `${apiOrigin}${src.startsWith('/') ? src : `/${src}`}`;
+    }, [src]);
+
     const handleImageError = () => {
       setImageError(true);
     };
@@ -34,9 +47,9 @@ export const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
         )}
         {...props}
       >
-        {src && !imageError ? (
+        {imageSource && !imageError ? (
           <img
-            src={src}
+            src={imageSource}
             alt={name}
             className="h-full w-full object-cover"
             onError={handleImageError}
