@@ -14,6 +14,7 @@ import {
   Edit2,
   Clock,
   Download,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Avatar } from '../ui/Avatar';
@@ -40,7 +41,7 @@ import {
 import { useAuthStore } from '../../stores/authStore';
 import { useToast } from '../ui/Toast';
 import { useCreateProjectLabel } from '../../hooks/useProjects';
-import { api } from '../../api/client';
+import { api, handleApiError } from '../../api/client';
 
 interface TaskDetailModalProps {
   task: Task | null;
@@ -312,17 +313,20 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      toastError('Files must be 2 MB or smaller.', 'File too large');
+    if (file.size > 20 * 1024 * 1024) {
+      toastError('Ukuran berkas maksimal 20 MB.', 'File terlalu besar');
       e.target.value = '';
       return;
     }
 
     try {
       await uploadAttachment.mutateAsync({ taskId: task.id, file });
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      toastSuccess('Berkas berhasil dilampirkan.', 'Upload berhasil');
     } catch (err: any) {
-      toastError(err?.response?.data?.message || err.message || 'Failed to upload attachment', 'Upload failed');
+      toastError(handleApiError(err), 'Gagal mengunggah berkas');
+    } finally {
+      e.target.value = '';
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -758,17 +762,26 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                 </h3>
 
                 {!readOnly && (
-                  <label className="cursor-pointer">
+                  <label className={`cursor-pointer inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline ${uploadAttachment.isPending ? 'opacity-50 pointer-events-none' : ''}`}>
                     <input
                       ref={fileInputRef}
                       type="file"
+                      accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z"
                       className="hidden"
                       onChange={handleFileUpload}
+                      disabled={uploadAttachment.isPending}
                     />
-                    <span className="text-xs font-semibold text-primary hover:underline flex items-center gap-1">
-                      <Plus className="w-3.5 h-3.5" />
-                      Upload File
-                    </span>
+                    {uploadAttachment.isPending ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                        Mengunggah...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-3.5 h-3.5" />
+                        Upload File
+                      </>
+                    )}
                   </label>
                 )}
               </div>
@@ -1130,14 +1143,24 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                   {/* Attachment File Input Button */}
                   <div>
-                    <label className="cursor-pointer w-full flex items-center gap-2 px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors">
-                      <Paperclip className="w-3.5 h-3.5 text-muted" />
-                      Upload file
+                    <label className={`cursor-pointer w-full flex items-center gap-2 px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors ${uploadAttachment.isPending ? 'opacity-50 pointer-events-none' : ''}`}>
+                      {uploadAttachment.isPending ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                          Mengunggah...
+                        </>
+                      ) : (
+                        <>
+                          <Paperclip className="w-3.5 h-3.5 text-muted" />
+                          Upload file
+                        </>
+                      )}
                       <input
                         type="file"
-                        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.jpg,.jpeg,.png,.webp,.zip"
+                        accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z"
                         className="hidden"
                         onChange={handleFileUpload}
+                        disabled={uploadAttachment.isPending}
                       />
                     </label>
                   </div>

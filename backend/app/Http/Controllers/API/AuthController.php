@@ -159,13 +159,13 @@ class AuthController extends Controller
     public function updateAvatar(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'avatar' => 'required|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'avatar' => 'required|file|image|mimes:jpg,jpeg,png,webp,gif,bmp,heic,heif|max:10240',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'The avatar must be a JPG, PNG, or WebP image no larger than 2 MB.',
+                'message' => $validator->errors()->first('avatar') ?: 'File avatar tidak valid atau melebihi batas ukuran (maksimal 10 MB).',
                 'errors' => $validator->errors(),
             ], 422);
         }

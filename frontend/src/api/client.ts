@@ -10,14 +10,20 @@ export const api = axios.create({
   withCredentials: true,
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token and properly handle FormData
 api.interceptors.request.use(
   (config) => {
-    // Get token from localStorage or cookie
+    // Get token from localStorage
     const token = localStorage.getItem('auth_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // When sending FormData (file uploads), remove manual Content-Type so browser sets boundary
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+
     return config;
   },
   (error) => {
@@ -37,42 +43,60 @@ api.interceptors.response.use(
       }
     }
 
-    // Handle 403 Forbidden
-    if (error.response?.status === 403) {
-      console.error('Access forbidden:', error.response.data);
-    }
-
-    // Handle 404 Not Found
-    if (error.response?.status === 404) {
-      console.error('Resource not found:', error.response.data);
-    }
-
-    // Handle 422 Validation Error
-    if (error.response?.status === 422) {
-      console.error('Validation error:', error.response.data);
-    }
-
-    // Handle 500 Server Error
-    if (error.response?.status === 500) {
-      console.error('Server error:', error.response.data);
-    }
-
     return Promise.reject(error);
   }
 );
 
-// Helper function to handle API errors
-export const handleApiError = (error: AxiosError) => {
-  if (error.response?.data) {
-    const errorData = error.response.data as any;
-    return errorData.message || 'An error occurred';
+// Helper function to handle and extract human-friendly API errors
+export const handleApiError = (error: any): string => {
+  if (error?.response?.data) {
+    const errorData = error.response.data;
+
+    // Check for Laravel validation errors object { errors: { field: ['message'] } }
+    if (errorData.errors && typeof errorData.errors === 'object') {
+      const fieldKeys = Object.keys(errorData.errors);
+      if (fieldKeys.length > 0) {
+        const firstFieldErrors = errorData.errors[fieldKeys[0]];
+        if (Array.isArray(firstFieldErrors) && firstFieldErrors.length > 0) {
+          return firstFieldErrors[0];
+        }
+        if (typeof firstFieldErrors === 'string') {
+          return firstFieldErrors;
+        }
+      }
+    }
+
+    if (errorData.message && typeof errorData.message === 'string' && errorData.message !== 'Validation error') {
+      return errorData.message;
+    }
   }
-  
-  if (error.request) {
-    return 'Network error. Please check your connection.';
+
+  // Handle specific HTTP Status Codes
+  if (error?.response?.status === 413) {
+    return 'Ukuran file terlalu besar untuk diunggah ke server (Payload Too Large).';
   }
-  
-  return error.message || 'An unexpected error occurred';
+
+  if (error?.response?.status === 415) {
+    return 'Format file tidak didukung oleh sistem.';
+  }
+
+  if (error?.response?.status === 403) {
+    return error?.response?.data?.message || 'Anda tidak memiliki izin untuk melakukan tindakan ini.';
+  }
+
+  if (error?.response?.status === 404) {
+    return error?.response?.data?.message || 'Data atau berkas tidak ditemukan.';
+  }
+
+  if (error?.response?.status >= 500) {
+    return 'Terjadi kesalahan pada server. Silakan coba lagi nanti.';
+  }
+
+  if (error?.request) {
+    return 'Gagal terhubung ke server. Periksa koneksi internet Anda.';
+  }
+
+  return error?.message || 'Terjadi kesalahan yang tidak terduga.';
 };
 
 export default api;

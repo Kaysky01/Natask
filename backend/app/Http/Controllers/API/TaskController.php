@@ -761,13 +761,13 @@ class TaskController extends Controller
         $this->authorizeTaskAccess($request->user(), $task);
 
         $validator = Validator::make($request->all(), [
-            'file' => 'required|file|max:2048|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,jpg,jpeg,png,webp,zip', // max 2MB
+            'file' => 'required|file|max:20480|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,jpg,jpeg,png,webp,gif,svg,zip,rar,7z,mp4,mov', // max 20MB
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Validation error',
+                'message' => $validator->errors()->first('file') ?: 'File tidak valid atau melebihi batas ukuran (maksimal 20 MB).',
                 'errors' => $validator->errors(),
             ], 422);
         }
