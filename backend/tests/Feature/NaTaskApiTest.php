@@ -28,6 +28,30 @@ class NaTaskApiTest extends TestCase
             ]);
     }
 
+    public function test_user_registration_requires_valid_phone_number(): void
+    {
+        // 1. Without phone -> 422
+        $respNoPhone = $this->postJson('/api/auth/register', [
+            'name' => 'John Doe',
+            'email' => 'john_' . uniqid() . '@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+        $respNoPhone->assertStatus(422);
+
+        // 2. With valid phone -> 201
+        $uniqueEmail = 'john_' . uniqid() . '@example.com';
+        $respSuccess = $this->postJson('/api/auth/register', [
+            'name' => 'John Doe',
+            'email' => $uniqueEmail,
+            'phone' => '081234567890',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+        $respSuccess->assertStatus(201);
+        $this->assertEquals('081234567890', User::where('email', $uniqueEmail)->first()->phone);
+    }
+
     public function test_authenticated_user_can_fetch_projects(): void
     {
         $user = User::where('email', 'admin@natask.com')->first();

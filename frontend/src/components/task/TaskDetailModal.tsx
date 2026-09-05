@@ -365,10 +365,10 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   const isOverdue = taskData?.due_date && new Date(taskData.due_date) < new Date();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-surface border border-border w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+      <div className="bg-surface border border-border w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[92dvh]">
         {/* Modal Header (Trello Style) */}
-        <div className="px-6 py-4 border-b border-border bg-surface flex items-start justify-between gap-4 shrink-0">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-border bg-surface flex items-start justify-between gap-3 shrink-0">
           <div className="space-y-1 flex-1 min-w-0">
             {/* Inline Title Editing */}
             {!readOnly && isEditingTitle ? (
@@ -440,7 +440,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         </div>
 
         {/* Modal Body (2-Column Trello Layout) */}
-        <div className="p-6 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
           {/* Main Left Column (Content) */}
           <div className="md:col-span-2 space-y-6">
             {/* Quick Metadata Row (Members, Labels, Due Date) */}

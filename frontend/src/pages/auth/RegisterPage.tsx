@@ -10,6 +10,7 @@ import { LogoIcon } from '../../components/ui/Logo';
 export const RegisterPage: React.FC = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -21,6 +22,11 @@ export const RegisterPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!phone.trim()) {
+      setError('Nomor WhatsApp aktif wajib diisi');
+      return;
+    }
 
     if (password !== passwordConfirmation) {
       setError('Passwords do not match');
@@ -37,6 +43,7 @@ export const RegisterPage: React.FC = () => {
       await register({
         name,
         email,
+        phone: phone.trim(),
         password,
         password_confirmation: passwordConfirmation,
       });
@@ -89,6 +96,20 @@ export const RegisterPage: React.FC = () => {
                   placeholder="maya@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-text">Nomor WhatsApp Aktif</label>
+                  <span className="text-[10px] text-muted">Wajib diisi untuk notifikasi</span>
+                </div>
+                <Input
+                  type="tel"
+                  placeholder="Contoh: 081234567890"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
                   required
                 />
               </div>

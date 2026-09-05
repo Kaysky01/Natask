@@ -46,11 +46,11 @@ export const DashboardPage: React.FC = () => {
   const activities = data?.recent_activities || [];
 
   return (
-    <div className="flex-1 p-6 max-w-6xl mx-auto w-full space-y-8">
+    <div className="flex-1 p-4 sm:p-6 max-w-6xl mx-auto w-full space-y-6 sm:space-y-8">
       {/* Welcome Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-surface border border-border rounded-2xl shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6 bg-surface border border-border rounded-2xl shadow-xs">
         <div className="space-y-1">
-          <h1 className="text-xl font-bold tracking-tight text-text flex items-center gap-2">
+          <h1 className="text-lg sm:text-xl font-bold tracking-tight text-text flex items-center gap-2">
             Welcome back, {user?.name || 'there'}! <Sparkles className="w-4 h-4 text-warning" />
           </h1>
           <p className="text-xs text-muted">
@@ -67,7 +67,7 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="p-4 bg-surface border border-border rounded-2xl space-y-2">
           <div className="flex items-center justify-between text-muted">
             <span className="text-xs font-semibold uppercase tracking-wider">Active Projects</span>

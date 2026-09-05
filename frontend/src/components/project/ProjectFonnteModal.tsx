@@ -131,8 +131,8 @@ export const ProjectFonnteModal: React.FC<ProjectFonnteModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div className="bg-surface border border-border w-full max-w-2xl rounded-2xl p-6 space-y-6 shadow-2xl my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
+      <div className="bg-surface border border-border w-full max-w-2xl rounded-2xl p-4 sm:p-6 space-y-6 shadow-2xl my-auto max-h-[92dvh] overflow-y-auto">
         
         {/* Modal Header */}
         <div className="flex items-start justify-between border-b border-border pb-4">

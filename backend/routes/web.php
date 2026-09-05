@@ -29,6 +29,7 @@ Route::get('/', function () {
 // Google OAuth routes (web routes for proper redirects)
 Route::prefix('auth')->group(function () {
     Route::get('google', [AuthController::class, 'redirectToGoogle']);
+    Route::get('google/redirect', [AuthController::class, 'redirectToGoogle']);
     Route::get('google/callback', [AuthController::class, 'handleGoogleCallback']);
 });
 

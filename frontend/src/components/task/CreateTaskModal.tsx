@@ -73,9 +73,9 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-surface border border-border w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl shadow-xl animate-fade-in">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+      <div className="bg-surface border border-border w-full max-w-lg max-h-[92dvh] overflow-y-auto rounded-2xl shadow-xl animate-fade-in my-auto">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-border">
           <div>
             <h2 className="text-base font-bold text-text">New Task</h2>
             <p className="text-xs text-muted mt-0.5">Add the details your team needs to get started.</p>
@@ -85,7 +85,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
           <div className="space-y-1">
             <label className="text-xs font-semibold text-text">Task title <span className="text-error">*</span></label>
             <Input

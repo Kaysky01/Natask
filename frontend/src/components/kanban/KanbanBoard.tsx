@@ -292,7 +292,7 @@ const KanbanColumn: React.FC<{
   ];
 
   return (
-    <div className="w-72 shrink-0 flex flex-col bg-surface/50 dark:bg-surface/30 border border-border/80 rounded-2xl p-3 max-h-[calc(100vh-210px)] relative">
+    <div className="w-[82vw] sm:w-72 shrink-0 snap-center flex flex-col bg-surface/50 dark:bg-surface/30 border border-border/80 rounded-2xl p-3 max-h-[calc(100vh-210px)] relative">
       {/* Column Header */}
       <div className="flex items-center justify-between pb-2.5 px-1 border-b border-border/60 mb-2.5 shrink-0 gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -669,8 +669,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-background overflow-hidden">
       {/* Trello-style Filter & Search Toolbar */}
-      <div className="border-b border-border/80 px-6 py-2.5 bg-surface/40 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-2.5 flex-1 max-w-md">
+      <div className="border-b border-border/80 px-4 sm:px-6 py-2.5 bg-surface/40 flex flex-wrap items-center justify-between gap-2.5 shrink-0">
+        <div className="flex items-center gap-2.5 flex-1 min-w-[200px] max-w-md">
           <div className="relative flex-1">
             <Search className="w-3.5 h-3.5 text-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
@@ -695,14 +695,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 text-xs text-muted">
             <Filter className="w-3.5 h-3.5" />
-            <span>Filters:</span>
+            <span className="hidden sm:inline">Filters:</span>
           </div>
 
           {/* Assignee Filter */}
           <select
             value={selectedAssignee}
             onChange={(e) => setSelectedAssignee(e.target.value)}
-            className="text-xs bg-surface border border-border rounded-lg px-2.5 py-1 text-text focus:outline-none"
+            className="text-xs bg-surface border border-border rounded-lg px-2.5 py-1 text-text focus:outline-none max-w-[130px] truncate"
           >
             <option value="all">All Members</option>
             <option value="unassigned">Unassigned</option>
@@ -770,7 +770,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       </div>
 
       {/* Horizontal Board Canvas */}
-      <div className="flex-1 overflow-x-auto p-4 md:p-6 min-h-0 flex items-start">
+      <div className="flex-1 overflow-x-auto p-4 md:p-6 min-h-0 flex items-start snap-x snap-mandatory touch-pan-x">
         {/* Onboarding Empty State if 0 statuses */}
         {statuses.length === 0 ? (
           <div className="m-auto max-w-md text-center p-8 bg-surface border border-border rounded-2xl shadow-sm space-y-4">
@@ -822,7 +822,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
               {/* Trello "+ Add another list" Column */}
               {!readOnly && (
-                <div className="w-72 shrink-0">
+                <div className="w-[82vw] sm:w-72 shrink-0 snap-center">
                   {isAddingList ? (
                     <form
                       onSubmit={handleAddList}

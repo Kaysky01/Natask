@@ -217,11 +217,11 @@ export const ProjectWorkspacePage: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-background">
       {/* Project Workspace Header */}
-      <div className="border-b border-border bg-surface px-6 py-4 space-y-4 shrink-0">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="border-b border-border bg-surface px-4 sm:px-6 py-3.5 sm:py-4 space-y-3 sm:space-y-4 shrink-0">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-xl font-bold tracking-tight text-text">{project.name}</h1>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-text truncate max-w-full">{project.name}</h1>
               <Badge variant={priorityVariant} size="sm">{project.priority}</Badge>
               <Badge variant="neutral" size="sm">{project.status}</Badge>
               {isViewer && (
@@ -229,12 +229,12 @@ export const ProjectWorkspacePage: React.FC = () => {
               )}
             </div>
             {project.description && (
-              <p className="text-xs text-muted max-w-2xl">{project.description}</p>
+              <p className="text-xs text-muted max-w-2xl line-clamp-2 sm:line-clamp-none">{project.description}</p>
             )}
           </div>
 
           {/* Members Avatars & Add Member */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
             {project.members && project.members.length > 0 && (
               <div className="flex -space-x-1.5 overflow-hidden items-center mr-1" title="Project Members">
                 {project.members.slice(0, 5).map((m) => {
@@ -259,8 +259,8 @@ export const ProjectWorkspacePage: React.FC = () => {
                 onClick={() => setIsCreateTaskOpen(true)}
                 className="text-xs h-8"
               >
-                <Plus className="w-3.5 h-3.5 mr-1.5" />
-                New Task
+                <Plus className="w-3.5 h-3.5 mr-1 sm:mr-1.5" />
+                <span>New Task</span>
               </Button>
             )}
 
@@ -271,8 +271,8 @@ export const ProjectWorkspacePage: React.FC = () => {
                 onClick={() => setIsInviteModalOpen(true)}
                 className="text-xs h-8"
               >
-                <UserPlus className="w-3.5 h-3.5 mr-1.5" />
-                Invite
+                <UserPlus className="w-3.5 h-3.5 mr-1 sm:mr-1.5" />
+                <span>Invite</span>
               </Button>
             )}
 
@@ -294,7 +294,7 @@ export const ProjectWorkspacePage: React.FC = () => {
                 variant="ghost"
                 size="sm"
                 onClick={() => setIsDeleteProjectOpen(true)}
-                className="text-error hover:bg-error/10"
+                className="text-error hover:bg-error/10 h-8 px-2"
                 title="Delete project"
               >
                 <Trash2 className="w-4 h-4" />
@@ -303,9 +303,8 @@ export const ProjectWorkspacePage: React.FC = () => {
           </div>
         </div>
 
-
-        {/* Workspace Navigation Tabs */}
-        <div className="flex items-center gap-1 border-t border-border/60 pt-3">
+        {/* Workspace Navigation Tabs (Horizontal scroll on mobile) */}
+        <div className="flex items-center gap-1 border-t border-border/60 pt-2.5 overflow-x-auto no-scrollbar scroll-smooth">
           {([
             { key: 'board', label: 'Board', icon: FolderKanban },
             { key: 'list', label: 'List', icon: ListTodo },
@@ -316,7 +315,7 @@ export const ProjectWorkspacePage: React.FC = () => {
               key={key}
               onClick={() => setActiveTab(key)}
               className={`
-                flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors
+                flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors shrink-0
                 ${activeTab === key
                   ? 'bg-primary/10 text-primary'
                   : 'text-muted hover:text-text hover:bg-background'}

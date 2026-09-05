@@ -43,24 +43,34 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   return (
     <div className="min-h-screen bg-background text-text flex flex-col md:flex-row">
       {/* Mobile Topbar */}
-      <div className="md:hidden flex items-center justify-between px-4 py-3 bg-surface border-b border-border z-20 shrink-0">
+      <div className="md:hidden flex items-center justify-between px-4 py-3 bg-surface/90 backdrop-blur-md border-b border-border z-20 shrink-0 sticky top-0">
         <Link to="/dashboard" className="flex items-center gap-2 font-bold text-base tracking-tight">
           <Logo size="sm" />
         </Link>
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-lg text-muted hover:text-text hover:bg-background"
-          aria-label="Toggle Menu"
-        >
-          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-lg text-muted hover:text-text hover:bg-background transition-colors"
+            aria-label="Toggle Theme"
+            title="Toggle Light/Dark"
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4 text-warning" /> : <Moon className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 rounded-lg text-muted hover:text-text hover:bg-background transition-colors"
+            aria-label="Toggle Menu"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
 
       {/* Sidebar Navigation */}
       <aside
         className={`
           fixed md:static inset-y-0 left-0 z-30
-          w-60 bg-surface border-r border-border flex flex-col
+          w-64 sm:w-60 bg-surface border-r border-border flex flex-col shadow-xl md:shadow-none
           transform transition-transform duration-200 ease-in-out
           ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}

@@ -35,13 +35,17 @@ export const LoginPage: React.FC = () => {
   };
 
   const handleGoogleLogin = async () => {
+    setError(null);
     try {
-      const response = await api.get('/auth/google/redirect');
+      const response = await api.get('/auth/google');
       if (response.data?.data?.url) {
         window.location.href = response.data.data.url;
+      } else {
+        setError('Gagal memulai login Google. Silakan coba lagi.');
       }
-    } catch (err) {
-      setError('Google login initialization failed. Please use demo credentials.');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Google login initialization failed. Please check your credentials.';
+      setError(msg);
     }
   };
 

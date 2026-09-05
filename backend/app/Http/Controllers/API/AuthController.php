@@ -23,20 +23,28 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
+            'phone' => 'required|string|min:9|max:20|regex:/^[0-9+\s\-]+$/',
             'password' => 'required|string|min:8|confirmed',
+        ], [
+            'phone.required' => 'Nomor WhatsApp aktif wajib diisi.',
+            'phone.min' => 'Nomor WhatsApp minimal 9 digit.',
+            'phone.regex' => 'Format nomor WhatsApp tidak valid.',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Validation errors',
+                'message' => $validator->errors()->first('phone') ?: 'Validation errors',
                 'errors' => $validator->errors(),
             ], 422);
         }
 
+        $phone = preg_replace('/[^0-9+]/', '', $request->phone);
+
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
+            'phone' => $phone,
             'password' => Hash::make($request->password),
             'timezone' => $request->timezone ?? 'UTC',
         ]);
