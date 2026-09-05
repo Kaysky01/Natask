@@ -762,27 +762,35 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                 </h3>
 
                 {!readOnly && (
-                  <label className={`cursor-pointer inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline ${uploadAttachment.isPending ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <>
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z"
                       className="hidden"
                       onChange={handleFileUpload}
                       disabled={uploadAttachment.isPending}
                     />
-                    {uploadAttachment.isPending ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-                        Mengunggah...
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="w-3.5 h-3.5" />
-                        Upload File
-                      </>
-                    )}
-                  </label>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadAttachment.isPending}
+                      className={`inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline cursor-pointer ${
+                        uploadAttachment.isPending ? 'opacity-50 pointer-events-none' : ''
+                      }`}
+                    >
+                      {uploadAttachment.isPending ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                          Mengunggah...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-3.5 h-3.5" />
+                          Upload File
+                        </>
+                      )}
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -1143,7 +1151,14 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                   {/* Attachment File Input Button */}
                   <div>
-                    <label className={`cursor-pointer w-full flex items-center gap-2 px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors ${uploadAttachment.isPending ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadAttachment.isPending}
+                      className={`w-full flex items-center gap-2 px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors cursor-pointer ${
+                        uploadAttachment.isPending ? 'opacity-50 pointer-events-none' : ''
+                      }`}
+                    >
                       {uploadAttachment.isPending ? (
                         <>
                           <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
@@ -1155,14 +1170,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                           Upload file
                         </>
                       )}
-                      <input
-                        type="file"
-                        accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z"
-                        className="hidden"
-                        onChange={handleFileUpload}
-                        disabled={uploadAttachment.isPending}
-                      />
-                    </label>
+                    </button>
                   </div>
                 </div>
 

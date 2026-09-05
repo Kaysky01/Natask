@@ -1,5 +1,6 @@
 /**
  * Helper to compress and resize images on the client side (especially for mobile camera photos)
+ * Uses lightweight createImageBitmap with fallback to avoid memory bottlenecks on mobile devices.
  */
 export async function compressImage(
   file: File,
@@ -17,49 +18,45 @@ export async function compressImage(
     return file;
   }
 
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (readerEvent) => {
-      const img = new Image();
-      img.onload = () => {
-        let width = img.width;
-        let height = img.height;
+  try {
+    if (typeof createImageBitmap === 'function') {
+      const bitmap = await createImageBitmap(file);
+      let width = bitmap.width;
+      let height = bitmap.height;
 
-        if (width > maxWidth || height > maxHeight) {
-          if (width > height) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          } else {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
-          }
+      if (width > maxWidth || height > maxHeight) {
+        if (width > height) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        } else {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
         }
+      }
 
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
 
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(file);
-          return;
-        }
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        return file;
+      }
 
-        // Fill background with white for transparency fallback
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(bitmap, 0, 0, width, height);
 
-        const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
 
+      return await new Promise<File>((resolve) => {
         canvas.toBlob(
           (blob) => {
             if (blob && blob.size < file.size) {
-              const compressedFile = new File([blob], file.name, {
+              resolve(new File([blob], file.name, {
                 type: outputType,
                 lastModified: Date.now(),
-              });
-              resolve(compressedFile);
+              }));
             } else {
               resolve(file);
             }
@@ -67,23 +64,12 @@ export async function compressImage(
           outputType,
           quality
         );
-      };
+      });
+    }
+  } catch {
+    // If bitmap fails, fallback to original file safely
+    return file;
+  }
 
-      img.onerror = () => {
-        resolve(file);
-      };
-
-      if (readerEvent.target?.result) {
-        img.src = readerEvent.target.result as string;
-      } else {
-        resolve(file);
-      }
-    };
-
-    reader.onerror = () => {
-      resolve(file);
-    };
-
-    reader.readAsDataURL(file);
-  });
+  return file;
 }

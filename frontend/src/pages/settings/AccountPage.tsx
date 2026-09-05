@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { ArrowLeft, Bell, CircleUserRound, Save, Upload, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
@@ -14,6 +14,7 @@ const timezones = ['UTC', 'Asia/Jakarta', 'Asia/Singapore', 'Asia/Tokyo', 'Europ
 export const AccountPage: React.FC = () => {
   const { user, updateProfile, updateAvatar } = useAuthStore();
   const { success, error: toastError } = useToast();
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [bio, setBio] = useState('');
@@ -130,7 +131,18 @@ export const AccountPage: React.FC = () => {
               <p className="text-sm font-semibold text-text">Profile photo</p>
               <p className="text-xs text-muted">JPG, PNG, WebP, atau kamera HP (Maksimal 10 MB).</p>
             </div>
-            <label
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              onChange={handleAvatarChange}
+              disabled={isUploadingAvatar}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={isUploadingAvatar}
               className={`ml-auto inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-text bg-background border border-border rounded-lg hover:bg-surface cursor-pointer transition-colors ${
                 isUploadingAvatar ? 'opacity-50 pointer-events-none' : ''
               }`}
@@ -146,14 +158,7 @@ export const AccountPage: React.FC = () => {
                   Upload photo
                 </>
               )}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarChange}
-                disabled={isUploadingAvatar}
-                className="hidden"
-              />
-            </label>
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

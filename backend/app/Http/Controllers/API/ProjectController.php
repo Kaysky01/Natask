@@ -302,15 +302,14 @@ class ProjectController extends Controller
     }
 
     /**
-     * Create a shareable invitation link for the project.
+     * Create a shareable invitation link for the project (expires in 10 minutes).
      */
     public function createInvitation(Request $request, Project $project): JsonResponse
     {
-        $this->authorizeMember($request->user(), $project);
+        $this->authorizeAdmin($request->user(), $project);
 
-        $isOwner = $project->owner_id === $request->user()->id;
-        $canInviteAdmin = $isOwner;
-        $allowedRoles = $canInviteAdmin ? ['admin', 'member', 'viewer'] : ['member', 'viewer'];
+        $isOwner = (int) $project->owner_id === (int) $request->user()->id;
+        $allowedRoles = $isOwner ? ['admin', 'member', 'viewer'] : ['member', 'viewer'];
 
         $validator = Validator::make($request->all(), [
             'role' => 'required|in:' . implode(',', $allowedRoles),
@@ -319,27 +318,35 @@ class ProjectController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Validation error',
+                'message' => $isOwner ? 'Validation error' : 'Admins can only invite members or viewers',
                 'errors' => $validator->errors(),
             ], 422);
         }
 
+        // Clean up previous invitations for this project with the same role to regenerate cleanly
+        ProjectInvitation::where('project_id', $project->id)
+            ->where('role', $request->role)
+            ->delete();
+
         $token = Str::random(64);
+        $expiresAt = now()->addMinutes(10);
+
         $invitation = ProjectInvitation::create([
             'project_id' => $project->id,
             'invited_by' => $request->user()->id,
             'role' => $request->role,
             'token_hash' => hash('sha256', $token),
-            'expires_at' => now()->addDays(7),
+            'expires_at' => $expiresAt,
         ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Invitation link created successfully',
+            'message' => 'Link undangan berhasil dibuat (berlaku 10 menit)',
             'data' => [
                 'id' => $invitation->id,
                 'role' => $invitation->role,
                 'expires_at' => $invitation->expires_at,
+                'expires_in_seconds' => 600,
                 'url' => rtrim(config('app.frontend_url', 'http://localhost:5173'), '/') . '/invitations/' . $token,
             ],
         ], 201);
@@ -353,14 +360,13 @@ class ProjectController extends Controller
         $tokenHash = hash('sha256', $token);
         $invitation = ProjectInvitation::with(['project.owner:id,name,email,avatar', 'inviter:id,name,email,avatar'])
             ->where('token_hash', $tokenHash)
-            ->whereNull('accepted_at')
             ->where('expires_at', '>', now())
             ->first();
 
-        if (!$invitation) {
+        if (!$invitation || !$invitation->project) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invitation link is invalid or has expired',
+                'message' => 'Link undangan tidak valid atau sudah kadaluarsa (berlaku 10 menit). Silakan minta link baru.',
             ], 404);
         }
 
@@ -388,29 +394,39 @@ class ProjectController extends Controller
         $tokenHash = hash('sha256', $token);
         $invitation = ProjectInvitation::with('project')
             ->where('token_hash', $tokenHash)
-            ->whereNull('accepted_at')
             ->where('expires_at', '>', now())
             ->first();
 
-        if (!$invitation) {
+        if (!$invitation || !$invitation->project) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invitation link is invalid or has expired',
+                'message' => 'Link undangan tidak valid atau sudah kadaluarsa (berlaku 10 menit). Silakan minta link baru.',
             ], 404);
         }
 
         $project = $invitation->project;
-        if ($project->owner_id === $request->user()->id || $project->members()->where('user_id', $request->user()->id)->exists()) {
+        $currentUser = $request->user();
+
+        // If user is already owner or member of this project, return graceful success
+        if ((int) $project->owner_id === (int) $currentUser->id || $project->members()->where('user_id', $currentUser->id)->exists()) {
+            $currentRole = (int) $project->owner_id === (int) $currentUser->id
+                ? 'owner'
+                : ($project->getMemberRole($currentUser) ?? 'member');
+
             return response()->json([
-                'success' => false,
-                'message' => 'You are already a member of this project',
-            ], 409);
+                'success' => true,
+                'message' => 'Anda sudah menjadi anggota proyek ini',
+                'data' => [
+                    'project' => $project->only(['id', 'name', 'slug']),
+                    'role' => $currentRole,
+                    'already_member' => true,
+                ],
+            ]);
         }
 
-        DB::transaction(function () use ($invitation, $project, $request) {
-            $project->members()->attach($request->user()->id, ['role' => $invitation->role]);
-            $invitation->update(['accepted_at' => now()]);
-            Activity::log('member_joined_by_invitation', $project, $request->user(), [
+        DB::transaction(function () use ($invitation, $project, $currentUser) {
+            $project->members()->attach($currentUser->id, ['role' => $invitation->role]);
+            Activity::log('member_joined_by_invitation', $project, $currentUser, [
                 'role' => $invitation->role,
             ]);
             ProjectChanged::dispatch($project, 'member.joined');
@@ -418,10 +434,11 @@ class ProjectController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'You joined the project successfully',
+            'message' => 'Anda berhasil bergabung ke proyek ini',
             'data' => [
                 'project' => $project->only(['id', 'name', 'slug']),
                 'role' => $invitation->role,
+                'already_member' => false,
             ],
         ]);
     }

@@ -450,6 +450,106 @@ class NaTaskApiTest extends TestCase
             ->deleteJson("/api/tasks/{$task->id}");
         $respDeleteTask->assertStatus(403);
     }
+
+    public function test_invitation_expires_in_10_minutes_and_can_be_regenerated(): void
+    {
+        $owner = User::create([
+            'name' => 'Owner Invite',
+            'email' => 'owner_inv_' . uniqid() . '@natask.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+        $guest = User::create([
+            'name' => 'Guest User',
+            'email' => 'guest_' . uniqid() . '@natask.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+
+        $project = Project::create([
+            'name' => 'Invite 10 Min Project ' . uniqid(),
+            'owner_id' => $owner->id,
+            'status' => 'active',
+            'priority' => 'medium',
+        ]);
+        $project->createDefaultStatuses();
+
+        // 1. Owner creates invitation
+        $respCreate = $this->actingAs($owner, 'sanctum')
+            ->postJson("/api/projects/{$project->id}/invitations", [
+                'role' => 'member',
+            ]);
+
+        $respCreate->assertStatus(201);
+        $respCreate->assertJson([
+            'success' => true,
+            'data' => [
+                'role' => 'member',
+                'expires_in_seconds' => 600,
+            ],
+        ]);
+
+        $inviteUrl = $respCreate->json('data.url');
+        $token = basename($inviteUrl);
+
+        // 2. Guest previews invitation
+        $respPreview = $this->getJson("/api/invitations/{$token}/preview");
+        $respPreview->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'role' => 'member',
+                    'project' => [
+                        'id' => $project->id,
+                    ],
+                ],
+            ]);
+
+        // 3. Guest accepts invitation
+        $respAccept = $this->actingAs($guest, 'sanctum')
+            ->postJson("/api/invitations/{$token}/accept");
+
+        $respAccept->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'role' => 'member',
+                    'already_member' => false,
+                ],
+            ]);
+
+        $this->assertTrue($project->fresh()->members()->where('user_id', $guest->id)->exists());
+
+        // 4. Accepting again when already a member should succeed gracefully (already_member: true)
+        $respAcceptAgain = $this->actingAs($guest, 'sanctum')
+            ->postJson("/api/invitations/{$token}/accept");
+
+        $respAcceptAgain->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'already_member' => true,
+                ],
+            ]);
+
+        // 5. Test expired invitation (> 10 minutes)
+        $expiredToken = \Illuminate\Support\Str::random(64);
+        \App\Models\ProjectInvitation::create([
+            'project_id' => $project->id,
+            'invited_by' => $owner->id,
+            'role' => 'viewer',
+            'token_hash' => hash('sha256', $expiredToken),
+            'expires_at' => now()->subMinute(), // expired
+        ]);
+
+        $otherUser = User::create([
+            'name' => 'Other User',
+            'email' => 'other_' . uniqid() . '@natask.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+
+        $respExpired = $this->actingAs($otherUser, 'sanctum')
+            ->postJson("/api/invitations/{$expiredToken}/accept");
+        $respExpired->assertStatus(404);
+    }
 }
 
 

@@ -101,7 +101,11 @@ export const useAcceptProjectInvitation = () => {
   return useMutation({
     mutationFn: async (token: string) => {
       const response = await api.post(`/invitations/${token}/accept`);
-      return response.data.data as { project: { id: number; name: string; slug: string }; role: string };
+      return response.data.data as {
+        project: { id: number; name: string; slug: string };
+        role: string;
+        already_member?: boolean;
+      };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });

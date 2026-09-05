@@ -27,6 +27,8 @@ Route::prefix('auth')->group(function () {
     Route::get('google/callback', [AuthController::class, 'handleGoogleCallback']);
 });
 
+Route::get('invitations/{token}/preview', [ProjectController::class, 'previewInvitation']);
+
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
     // Current user
