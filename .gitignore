@@ -14,11 +14,26 @@ backend/public/build/
 backend/public/hot
 backend/public/storage
 backend/storage/app/public/*
+backend/database/*.sqlite
+backend/database/*.sqlite-*
 backend/storage/framework/cache/*
 backend/storage/framework/sessions/*
 backend/storage/framework/views/*
 backend/storage/logs/*.log
 backend/bootstrap/cache/*.php
+
+# Test and coverage artifacts
+backend/.phpunit.result.cache
+backend/coverage/
+coverage/
+*.coverage
+
+# Database and deployment artifacts
+*.sql.gz
+*.dump
+*.bak
+*.pid
+*.seed
 
 # Local tooling
 .vscode/
