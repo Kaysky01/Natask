@@ -148,7 +148,7 @@ class FonnteNotificationService
     }
 
     /**
-     * Dispatch notification when a task is created or assigned.
+     * Dispatch notification when a task is created.
      */
     public function notifyTaskCreated(Project $project, Task $task, User $actor): void
     {
@@ -158,7 +158,8 @@ class FonnteNotificationService
                 return;
             }
 
-            $assignees = $task->assignees;
+            // Always fresh load assignees with phone numbers
+            $assignees = $task->assignees()->select('users.id', 'users.name', 'users.email', 'users.phone')->get();
             $assigneeNames = $assignees->isNotEmpty()
                 ? $assignees->pluck('name')->join(', ')
                 : 'Belum ditugaskan';
@@ -188,9 +189,50 @@ class FonnteNotificationService
                 . "━━━━━━━━━━━━━━━━━━━\n"
                 . "🔗 *Buka Proyek:* {$projectUrl}";
 
-            $this->deliverNotification($setting, $message, $assignees);
+            $this->deliverNotification($setting, $message, $assignees, $actor, $project);
         } catch (\Throwable $e) {
             Log::warning('Fonnte notifyTaskCreated failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Dispatch notification when a member is assigned to a task.
+     */
+    public function notifyTaskAssigned(Project $project, Task $task, $assignedUsers, User $actor): void
+    {
+        try {
+            $setting = $project->fonnteSetting;
+            if (!$this->shouldSend($setting, 'notify_task_created')) {
+                return;
+            }
+
+            $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:5173'), '/');
+            $projectUrl = "{$frontendUrl}/projects/{$project->id}";
+
+            $dueDate = $task->due_date
+                ? \Carbon\Carbon::parse($task->due_date)->format('d M Y')
+                : '-';
+
+            $priorityEmoji = match ($task->priority) {
+                'urgent' => '🔴 Urgent',
+                'high' => '🟠 High',
+                'low' => '🟢 Low',
+                default => '🟡 Medium',
+            };
+
+            $message = "📋 *NaTask — Anda Ditugaskan pada Task*\n"
+                . "━━━━━━━━━━━━━━━━━━━\n"
+                . "📁 *Proyek:* {$project->name}\n"
+                . "📝 *Task:* {$task->title}\n"
+                . "👤 *Ditugaskan oleh:* {$actor->name}\n"
+                . "⚡ *Prioritas:* {$priorityEmoji}\n"
+                . "📅 *Deadline:* {$dueDate}\n"
+                . "━━━━━━━━━━━━━━━━━━━\n"
+                . "🔗 *Buka Task:* {$projectUrl}";
+
+            $this->deliverNotification($setting, $message, $assignedUsers, $actor, $project);
+        } catch (\Throwable $e) {
+            Log::warning('Fonnte notifyTaskAssigned failed: ' . $e->getMessage());
         }
     }
 
@@ -205,7 +247,8 @@ class FonnteNotificationService
                 return;
             }
 
-            $assignees = $task->assignees;
+            // Always fresh load assignees with phone numbers
+            $assignees = $task->assignees()->select('users.id', 'users.name', 'users.email', 'users.phone')->get();
             $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:5173'), '/');
             $projectUrl = "{$frontendUrl}/projects/{$project->id}";
 
@@ -221,7 +264,7 @@ class FonnteNotificationService
                 . "━━━━━━━━━━━━━━━━━━━\n"
                 . "🔗 *Buka Proyek:* {$projectUrl}";
 
-            $this->deliverNotification($setting, $message, $assignees);
+            $this->deliverNotification($setting, $message, $assignees, $actor, $project);
         } catch (\Throwable $e) {
             Log::warning('Fonnte notifyTaskStatusChanged failed: ' . $e->getMessage());
         }
@@ -238,7 +281,8 @@ class FonnteNotificationService
                 return;
             }
 
-            $assignees = $task->assignees;
+            // Always fresh load assignees with phone numbers
+            $assignees = $task->assignees()->select('users.id', 'users.name', 'users.email', 'users.phone')->get();
             $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:5173'), '/');
             $projectUrl = "{$frontendUrl}/projects/{$project->id}";
 
@@ -253,7 +297,7 @@ class FonnteNotificationService
                 . "━━━━━━━━━━━━━━━━━━━\n"
                 . "🔗 *Buka Task:* {$projectUrl}";
 
-            $this->deliverNotification($setting, $message, $assignees, $actor);
+            $this->deliverNotification($setting, $message, $assignees, $actor, $project);
         } catch (\Throwable $e) {
             Log::warning('Fonnte notifyTaskCommented failed: ' . $e->getMessage());
         }
@@ -282,20 +326,25 @@ class FonnteNotificationService
                 . "Selamat datang di tim! 🎉\n"
                 . "🔗 *Buka Proyek:* {$projectUrl}";
 
-            // Send to group or project owner
             $targets = [];
             if ($setting->target_type === 'group' || $setting->target_type === 'both') {
                 if (!empty($setting->group_target)) {
-                    $targets[] = $setting->group_target;
+                    $targets[] = trim($setting->group_target);
                 }
             }
 
-            // Also notify owner if personal
-            if (($setting->target_type === 'personal' || $setting->target_type === 'both') && !empty($project->owner?->phone)) {
-                $targets[] = $project->owner->phone;
+            // Also notify owner and the new member if personal
+            if ($setting->target_type === 'personal' || $setting->target_type === 'both') {
+                $owner = $project->owner()->select('id', 'name', 'phone')->first() ?? $project->owner;
+                if ($owner && !empty($owner->phone)) {
+                    $targets[] = $this->cleanPhoneNumber($owner->phone);
+                }
+                if (!empty($newMember->phone)) {
+                    $targets[] = $this->cleanPhoneNumber($newMember->phone);
+                }
             }
 
-            foreach (array_unique($targets) as $target) {
+            foreach (array_unique(array_filter($targets)) as $target) {
                 $this->sendRawMessage(
                     $setting->api_endpoint ?? 'https://api.fonnte.com/send',
                     $setting->api_token,
@@ -306,6 +355,15 @@ class FonnteNotificationService
         } catch (\Throwable $e) {
             Log::warning('Fonnte notifyMemberJoined failed: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Helper to clean / sanitize phone numbers.
+     */
+    private function cleanPhoneNumber(string $phone): string
+    {
+        $cleaned = preg_replace('/[^0-9+]/', '', trim($phone));
+        return $cleaned;
     }
 
     /**
@@ -331,26 +389,40 @@ class FonnteNotificationService
         ProjectFonnteSetting $setting,
         string $message,
         $assignees = null,
-        ?User $excludeUser = null
+        ?User $excludeUser = null,
+        ?Project $project = null
     ): void {
         $targets = [];
 
         // 1. Group Target
         if ($setting->target_type === 'group' || $setting->target_type === 'both') {
             if (!empty($setting->group_target)) {
-                $targets[] = $setting->group_target;
+                $targets[] = trim($setting->group_target);
             }
         }
 
         // 2. Personal Targets (Assignees with valid phone numbers)
         if ($setting->target_type === 'personal' || $setting->target_type === 'both') {
-            if ($assignees && method_exists($assignees, 'all')) {
+            $hasPersonalTargets = false;
+
+            if ($assignees && is_iterable($assignees)) {
                 foreach ($assignees as $assignee) {
                     if ($excludeUser && (int) $assignee->id === (int) $excludeUser->id) {
                         continue;
                     }
                     if (!empty($assignee->phone)) {
-                        $targets[] = $assignee->phone;
+                        $targets[] = $this->cleanPhoneNumber($assignee->phone);
+                        $hasPersonalTargets = true;
+                    }
+                }
+            }
+
+            // Fallback for personal notifications: If task has NO assignees, or if action was performed by someone else, notify the Project Owner!
+            if (!$hasPersonalTargets && $project) {
+                $owner = $project->owner()->select('id', 'name', 'phone')->first() ?? $project->owner;
+                if ($owner && !empty($owner->phone)) {
+                    if (!$excludeUser || (int) $owner->id !== (int) $excludeUser->id) {
+                        $targets[] = $this->cleanPhoneNumber($owner->phone);
                     }
                 }
             }

@@ -39,8 +39,8 @@ class TaskController extends Controller
             ->with([
                 'project:id,name,slug',
                 'status',
-                'creator:id,name,email,avatar',
-                'assignees:id,name,email,avatar',
+                'creator:id,name,email,avatar,phone',
+                'assignees:id,name,email,avatar,phone',
                 'labels',
                 'checklists.items',
             ])
@@ -95,8 +95,8 @@ class TaskController extends Controller
         $tasks = $project->tasks()
             ->with([
                 'status',
-                'creator:id,name,email,avatar',
-                'assignees:id,name,email,avatar',
+                'creator:id,name,email,avatar,phone',
+                'assignees:id,name,email,avatar,phone',
                 'labels',
                 'checklists.items',
             ])
@@ -182,8 +182,8 @@ class TaskController extends Controller
         $task->load([
             'project:id,name,slug',
             'status',
-            'creator:id,name,email,avatar',
-            'assignees:id,name,email,avatar',
+            'creator:id,name,email,avatar,phone',
+            'assignees:id,name,email,avatar,phone',
             'labels',
             'checklists.items',
         ]);
@@ -208,12 +208,12 @@ class TaskController extends Controller
         $task->load([
             'project:id,name,slug',
             'status',
-            'creator:id,name,email,avatar',
-            'assignees:id,name,email,avatar',
+            'creator:id,name,email,avatar,phone',
+            'assignees:id,name,email,avatar,phone',
             'labels',
             'checklists.items',
-            'comments.user:id,name,email,avatar',
-            'attachments.user:id,name,email,avatar',
+            'comments.user:id,name,email,avatar,phone',
+            'attachments.user:id,name,email,avatar,phone',
         ]);
 
         return response()->json([
@@ -290,12 +290,12 @@ class TaskController extends Controller
         $task->load([
             'project:id,name,slug',
             'status',
-            'creator:id,name,email,avatar',
-            'assignees:id,name,email,avatar',
+            'creator:id,name,email,avatar,phone',
+            'assignees:id,name,email,avatar,phone',
             'labels',
             'checklists.items',
-            'comments.user:id,name,email,avatar',
-            'attachments.user:id,name,email,avatar',
+            'comments.user:id,name,email,avatar,phone',
+            'attachments.user:id,name,email,avatar,phone',
         ]);
 
         return response()->json([
@@ -348,6 +348,7 @@ class TaskController extends Controller
             ], 422);
         }
 
+        $oldStatus = $task->status;
         $newStatus = TaskStatus::findOrFail($request->status_id);
         if ($newStatus->project_id !== $task->project_id) {
             return response()->json([
@@ -357,6 +358,17 @@ class TaskController extends Controller
         }
         $task->moveToStatus($newStatus, $request->position);
         ProjectChanged::dispatch($task->project, 'task.status_updated', $task->id);
+
+        // Send Fonnte WhatsApp notification if status changed
+        if ($oldStatus && (int) $oldStatus->id !== (int) $newStatus->id) {
+            app(\App\Services\FonnteNotificationService::class)->notifyTaskStatusChanged(
+                $task->project,
+                $task,
+                $oldStatus,
+                $newStatus,
+                $request->user()
+            );
+        }
 
         return response()->json([
             'success' => true,
@@ -417,6 +429,14 @@ class TaskController extends Controller
 
         $userIds = $request->has('user_ids') ? $request->user_ids : [$request->user_id];
         $task->assignees()->syncWithoutDetaching($userIds);
+
+        $assignedUsers = User::whereIn('id', $userIds)->select('id', 'name', 'email', 'phone')->get();
+        app(\App\Services\FonnteNotificationService::class)->notifyTaskAssigned(
+            $task->project,
+            $task,
+            $assignedUsers,
+            $request->user()
+        );
 
         return response()->json([
             'success' => true,

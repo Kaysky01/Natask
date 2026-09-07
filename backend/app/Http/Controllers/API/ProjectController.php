@@ -32,7 +32,7 @@ class ProjectController extends Controller
                       $mq->where('user_id', $user->id);
                   });
             })
-            ->with(['owner:id,name,email,avatar', 'members:id,name,email,avatar', 'taskStatuses'])
+            ->with(['owner:id,name,email,avatar,phone', 'members:id,name,email,avatar,phone', 'taskStatuses'])
             ->withCount(['tasks', 'tasks as completed_tasks_count' => function ($q) {
                 $q->whereHas('status', function ($sq) {
                     $sq->whereIn('name', ['Done', 'Completed']);
@@ -112,7 +112,7 @@ class ProjectController extends Controller
         Activity::log('project_created', $project, $user, ['name' => $project->name]);
         ProjectChanged::dispatch($project, 'project.created');
 
-        $project->load(['owner:id,name,email,avatar', 'members:id,name,email,avatar', 'taskStatuses']);
+        $project->load(['owner:id,name,email,avatar,phone', 'members:id,name,email,avatar,phone', 'taskStatuses']);
 
         return response()->json([
             'success' => true,
@@ -134,8 +134,8 @@ class ProjectController extends Controller
         }
 
         $project->load([
-            'owner:id,name,email,avatar',
-            'members:id,name,email,avatar',
+            'owner:id,name,email,avatar,phone',
+            'members:id,name,email,avatar,phone',
             'taskStatuses' => function ($q) {
                 $q->orderBy('position');
             },
@@ -143,7 +143,7 @@ class ProjectController extends Controller
             'tasks' => function ($q) {
                 $q->with([
                     'status',
-                    'assignees:id,name,email,avatar',
+                    'assignees:id,name,email,avatar,phone',
                     'labels',
                     'checklists.items',
                 ])
@@ -174,8 +174,8 @@ class ProjectController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|required|string|max:255',
-            'description' => 'nullable|string|max:2000',
-            'status' => 'sometimes|in:planning,active,on_hold,completed,archived',
+            'description' => 'nullable|string',
+            'status' => 'sometimes|in:active,completed,archived',
             'priority' => 'sometimes|in:low,medium,high,urgent',
             'start_date' => 'nullable|date',
             'due_date' => 'nullable|date',
@@ -199,7 +199,7 @@ class ProjectController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Project updated successfully',
-            'data' => $project->fresh(['owner:id,name,email,avatar', 'members:id,name,email,avatar', 'taskStatuses']),
+            'data' => $project->fresh(['owner:id,name,email,avatar,phone', 'members:id,name,email,avatar,phone', 'taskStatuses']),
         ]);
     }
 
