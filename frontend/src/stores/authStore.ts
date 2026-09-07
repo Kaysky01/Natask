@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { api, handleApiError } from '../api/client';
 import { queryClient } from '../api/queryClient';
+import { projectKeys, taskKeys, dashboardKeys } from '../api/queryKeys';
 import type { User, LoginCredentials, RegisterData } from '../types';
 
 interface AuthState {
@@ -39,7 +40,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await api.put('/auth/profile', data);
-      set({ user: response.data.data, isLoading: false });
+      const updatedUser = response.data.data;
+      set({ user: updatedUser, isLoading: false });
+      queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     } catch (err: any) {
       const errorMessage = handleApiError(err);
       set({ error: errorMessage, isLoading: false });
@@ -55,7 +60,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const response = await api.post('/auth/avatar', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      set({ user: response.data.data, isLoading: false });
+      const updatedUser = response.data.data;
+      set({ user: updatedUser, isLoading: false });
+      queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     } catch (err: any) {
       const errorMessage = handleApiError(err);
       set({ error: errorMessage, isLoading: false });
@@ -66,6 +75,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (credentials: LoginCredentials) => {
     set({ isLoading: true, error: null });
     try {
+      queryClient.clear();
       const response = await api.post('/auth/login', credentials);
       const { user, token } = response.data.data;
       localStorage.setItem('auth_token', token);
@@ -80,6 +90,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (data: RegisterData) => {
     set({ isLoading: true, error: null });
     try {
+      queryClient.clear();
       const response = await api.post('/auth/register', data);
       const { user, token } = response.data.data;
       localStorage.setItem('auth_token', token);
@@ -107,6 +118,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   setToken: async (token: string) => {
     localStorage.setItem('auth_token', token);
+    queryClient.clear();
     set({ token, isAuthenticated: true });
     await get().checkAuth();
   },
@@ -122,8 +134,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const response = await api.get('/auth/me');
       set({ user: response.data.data, isAuthenticated: true, isLoading: false });
-    } catch (err) {
+    } catch {
       localStorage.removeItem('auth_token');
+      queryClient.clear();
       set({ user: null, token: null, isAuthenticated: false, isLoading: false });
     }
   },

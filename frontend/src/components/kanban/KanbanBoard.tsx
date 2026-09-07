@@ -59,10 +59,9 @@ const TaskCard: React.FC<{
   task: Task;
   onClick: () => void;
   statuses: TaskStatus[];
-  statusId: number;
-  onStatusDraft: (taskId: number, statusId: number) => void;
+  onStatusChange: (taskId: number, statusId: number) => void;
   readOnly?: boolean;
-}> = ({ task, onClick, statuses, statusId, onStatusDraft, readOnly = false }) => {
+}> = ({ task, onClick, statuses, onStatusChange, readOnly = false }) => {
   const {
     attributes,
     listeners,
@@ -124,11 +123,12 @@ const TaskCard: React.FC<{
             {task.priority}
           </Badge>
           <select
-            value={statusId}
+            value={task.status_id}
+            disabled={readOnly}
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
-            onChange={(event) => onStatusDraft(task.id, Number(event.target.value))}
-            className="max-w-[115px] text-[10px] bg-background border border-border rounded-md px-1.5 py-1 text-text focus:outline-none focus:ring-1 focus:ring-primary"
+            onChange={(event) => onStatusChange(task.id, Number(event.target.value))}
+            className="max-w-[115px] text-[10px] bg-background border border-border rounded-md px-1.5 py-1 text-text focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
             title="Change task status"
           >
             {statuses.map((status) => (
@@ -223,10 +223,9 @@ const KanbanColumn: React.FC<{
   onTaskClick: (task: Task) => void;
   onAddTask: (statusId: number, title: string) => Promise<void>;
   statuses: TaskStatus[];
-  pendingTaskStatuses: Record<number, number>;
-  onStatusDraft: (taskId: number, statusId: number) => void;
+  onStatusChange: (taskId: number, statusId: number) => void;
   readOnly?: boolean;
-}> = ({ projectId, status, tasks, onTaskClick, onAddTask, statuses, pendingTaskStatuses, onStatusDraft, readOnly = false }) => {
+}> = ({ projectId, status, tasks, onTaskClick, onAddTask, statuses, onStatusChange, readOnly = false }) => {
 
   const [isAdding, setIsAdding] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
@@ -429,8 +428,7 @@ const KanbanColumn: React.FC<{
               task={task}
               onClick={() => onTaskClick(task)}
               statuses={statuses}
-              statusId={pendingTaskStatuses[task.id] ?? task.status_id}
-              onStatusDraft={onStatusDraft}
+              onStatusChange={onStatusChange}
               readOnly={readOnly}
             />
           ))}
@@ -509,7 +507,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   labels = [],
   readOnly = false,
 }) => {
-
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -522,7 +519,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   // Add Column Inline State
   const [isAddingList, setIsAddingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
-  const [pendingTaskStatuses, setPendingTaskStatuses] = useState<Record<number, number>>({});
 
   const createTask = useCreateTask();
   const updateTaskStatus = useUpdateTaskStatus();
@@ -609,18 +605,11 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     });
   };
 
-  const handleTaskStatusDraft = (taskId: number, statusId: number) => {
-    setPendingTaskStatuses((current) => ({ ...current, [taskId]: statusId }));
-  };
-
-  const handleSaveTaskStatuses = async () => {
+  const handleStatusChange = async (taskId: number, statusId: number) => {
     try {
-      await Promise.all(Object.entries(pendingTaskStatuses).map(([taskId, statusId]) =>
-        updateTaskStatus.mutateAsync({ taskId: Number(taskId), statusId })
-      ));
-      setPendingTaskStatuses({});
+      await updateTaskStatus.mutateAsync({ taskId, statusId });
     } catch (err: any) {
-      toastError(err?.response?.data?.message || 'Could not save task status changes.', 'Save failed');
+      toastError(err?.response?.data?.message || 'Could not move task.', 'Update failed');
     }
   };
 
@@ -651,7 +640,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     const overTaskId = Number(over.id);
     const overTask = tasks.find((t) => t.id === overTaskId);
     if (overTask) {
-      targetStatusId = pendingTaskStatuses[overTask.id] ?? overTask.status_id;
+      targetStatusId = overTask.status_id;
     } else {
       // Over a column
       const overStatus = statuses.find((s) => s.id === Number(over.id));
@@ -660,11 +649,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       }
     }
 
-    const currentStatusId = pendingTaskStatuses[activeTaskId] ?? activeTask.status_id;
-    if (targetStatusId && targetStatusId !== currentStatusId) {
-      handleTaskStatusDraft(activeTaskId, targetStatusId);
+    if (targetStatusId && targetStatusId !== activeTask.status_id) {
+      handleStatusChange(activeTaskId, targetStatusId);
     }
   };
+
+  const currentSelectedTask = selectedTask
+    ? tasks.find((t) => t.id === selectedTask.id) || selectedTask
+    : null;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-background overflow-hidden">
@@ -751,21 +743,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           <div className="text-[11px] text-muted pl-2 border-l border-border">
             {filteredTasks.length} / {tasks.length} cards
           </div>
-          {Object.keys(pendingTaskStatuses).length > 0 && (
-            <div className="flex items-center gap-1.5 pl-2 border-l border-border">
-              <button
-                type="button"
-                onClick={handleSaveTaskStatuses}
-                disabled={updateTaskStatus.isPending}
-                className="text-xs font-semibold text-primary hover:underline disabled:opacity-50"
-              >
-                Save changes
-              </button>
-              <button type="button" onClick={() => setPendingTaskStatuses({})} className="text-xs text-muted hover:text-text">
-                Cancel
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -803,7 +780,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             <div className="flex gap-4 items-start pb-4">
               {/* Render Columns */}
               {statuses.map((status) => {
-                const columnTasks = filteredTasks.filter((t) => (pendingTaskStatuses[t.id] ?? t.status_id) === status.id);
+                const columnTasks = filteredTasks.filter((t) => t.status_id === status.id);
                 return (
                   <KanbanColumn
                     key={status.id}
@@ -813,8 +790,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     onTaskClick={handleTaskClick}
                     onAddTask={handleAddTask}
                     statuses={statuses}
-                    pendingTaskStatuses={pendingTaskStatuses}
-                    onStatusDraft={handleTaskStatusDraft}
+                    onStatusChange={handleStatusChange}
                     readOnly={readOnly}
                   />
                 );
@@ -876,7 +852,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
       {/* Trello-Style Card Detail Modal */}
       <TaskDetailModal
-        task={selectedTask}
+        task={currentSelectedTask}
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   FolderKanban, 
   ListTodo, 
@@ -34,6 +34,7 @@ import type { Task, TaskStatus, User, ProjectRole } from '../../types';
 
 export const ProjectWorkspacePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'board' | 'list' | 'calendar' | 'overview'>('board');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -45,10 +46,8 @@ export const ProjectWorkspacePage: React.FC = () => {
   const [inviteExpiresAt, setInviteExpiresAt] = useState<Date | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<number | null>(null);
-  const [pendingMemberRoles, setPendingMemberRoles] = useState<Record<number, 'admin' | 'member' | 'viewer'>>({});
   const [isDeleteProjectOpen, setIsDeleteProjectOpen] = useState(false);
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
-  const [pendingTaskStatuses, setPendingTaskStatuses] = useState<Record<number, number>>({});
 
   const { user: currentUser } = useAuthStore();
   const { success, error: toastError } = useToast();
@@ -149,43 +148,11 @@ export const ProjectWorkspacePage: React.FC = () => {
     }
   };
 
-  const handleSaveMemberRole = async (userId: number) => {
-    const role = pendingMemberRoles[userId];
-    if (!role) return;
-    try {
-      await updateMemberRole.mutateAsync({ projectId: project.id, userId, role });
-      setPendingMemberRoles((current) => {
-        const next = { ...current };
-        delete next[userId];
-        return next;
-      });
-      success('Member role updated.', 'Role saved');
-    } catch (err: any) {
-      toastError(err?.response?.data?.message || 'Could not update this member role.', 'Role update failed');
-    }
-  };
-
-  const handleSaveTaskStatus = async (taskId: number) => {
-    const statusId = pendingTaskStatuses[taskId];
-    if (!statusId) return;
-    try {
-      await updateTaskStatus.mutateAsync({ taskId, statusId });
-      setPendingTaskStatuses((current) => {
-        const next = { ...current };
-        delete next[taskId];
-        return next;
-      });
-      success('Task status updated.', 'Status saved');
-    } catch (err: any) {
-      toastError(err?.response?.data?.message || 'Could not update task status.', 'Status update failed');
-    }
-  };
-
   const handleDeleteProject = async () => {
     if (!project) return;
     try {
       await deleteProject.mutateAsync(project.id);
-      window.location.assign('/projects');
+      navigate('/projects');
     } catch (err: any) {
       toastError(err?.response?.data?.message || 'Failed to delete project. Please try again.', 'Delete failed');
     }
@@ -376,24 +343,26 @@ export const ProjectWorkspacePage: React.FC = () => {
                             {task.status?.name ?? 'Todo'}
                           </Badge>
                         ) : (
-                          <>
-                            <select
-                              value={pendingTaskStatuses[task.id] || task.status_id}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) => setPendingTaskStatuses((current) => ({ ...current, [task.id]: Number(e.target.value) }))}
-                              className="text-xs bg-background border border-border rounded-md px-2 py-1 text-text"
-                            >
-                              {statuses.map((s: TaskStatus) => (
-                                <option key={s.id} value={s.id}>{s.name}</option>
-                              ))}
-                            </select>
-                            {pendingTaskStatuses[task.id] && (
-                              <div className="flex items-center gap-1 mt-1">
-                                <button type="button" onClick={(e) => { e.stopPropagation(); handleSaveTaskStatus(task.id); }} className="text-[10px] text-primary font-semibold hover:underline">Save</button>
-                                <button type="button" onClick={(e) => { e.stopPropagation(); setPendingTaskStatuses((current) => { const next = { ...current }; delete next[task.id]; return next; }); }} className="text-[10px] text-muted hover:text-text">Cancel</button>
-                              </div>
-                            )}
-                          </>
+                          <select
+                            value={task.status_id}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={async (e) => {
+                              e.stopPropagation();
+                              const newStatusId = Number(e.target.value);
+                              if (newStatusId === task.status_id) return;
+                              try {
+                                await updateTaskStatus.mutateAsync({ taskId: task.id, statusId: newStatusId });
+                                success('Task status updated.', 'Status saved');
+                              } catch (err: any) {
+                                toastError(err?.response?.data?.message || 'Could not update task status.', 'Status update failed');
+                              }
+                            }}
+                            className="text-xs bg-background border border-border rounded-md px-2 py-1 text-text cursor-pointer hover:border-primary/40 focus:outline-none"
+                          >
+                            {statuses.map((s: TaskStatus) => (
+                              <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                          </select>
                         )}
                       </td>
                       <td className="py-3 px-4">
@@ -498,27 +467,23 @@ export const ProjectWorkspacePage: React.FC = () => {
                       {canEditThisRole ? (
                         <div className="flex items-center gap-1">
                           <select
-                            value={pendingMemberRoles[memberId] || memberRole}
-                            onChange={(event) => setPendingMemberRoles((current) => ({
-                              ...current,
-                              [memberId]: event.target.value as 'admin' | 'member' | 'viewer',
-                            }))}
-                            className="text-[11px] bg-background border border-border rounded-md px-2 py-1 text-text capitalize"
+                            value={memberRole}
+                            onChange={async (event) => {
+                              const newRole = event.target.value as 'admin' | 'member' | 'viewer';
+                              if (newRole === memberRole) return;
+                              try {
+                                await updateMemberRole.mutateAsync({ projectId: project.id, userId: memberId, role: newRole });
+                                success('Member role updated.', 'Role saved');
+                              } catch (err: any) {
+                                toastError(err?.response?.data?.message || 'Could not update this member role.', 'Role update failed');
+                              }
+                            }}
+                            className="text-[11px] bg-background border border-border rounded-md px-2 py-1 text-text capitalize cursor-pointer hover:border-primary/40 focus:outline-none"
                           >
                             {isOwner && <option value="admin">admin</option>}
                             <option value="member">member</option>
                             <option value="viewer">viewer</option>
                           </select>
-                          {pendingMemberRoles[memberId] && (
-                            <>
-                              <button type="button" onClick={() => handleSaveMemberRole(memberId)} className="text-[10px] text-primary font-semibold hover:underline">Save</button>
-                              <button type="button" onClick={() => setPendingMemberRoles((current) => {
-                                const next = { ...current };
-                                delete next[memberId];
-                                return next;
-                              })} className="text-[10px] text-muted hover:text-text">Cancel</button>
-                            </>
-                          )}
                         </div>
                       ) : (
                         <Badge variant={memberRole === 'owner' ? 'primary' : memberRole === 'admin' ? 'warning' : 'neutral'} size="sm">

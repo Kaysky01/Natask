@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { fonnteKeys } from '../api/queryKeys';
 
 export interface FonnteSettingsData {
   id?: number;
@@ -19,52 +20,62 @@ export interface FonnteSettingsData {
 }
 
 export const useFonnteSettings = (projectId: number | string | undefined) => {
+  const numericProjectId = projectId ? Number(projectId) : undefined;
+
   return useQuery<FonnteSettingsData>({
-    queryKey: ['fonnte-settings', projectId],
+    queryKey: fonnteKeys.detail(numericProjectId),
     queryFn: async () => {
-      if (!projectId) throw new Error('Project ID required');
-      const response = await api.get(`/projects/${projectId}/fonnte`);
+      if (!numericProjectId) throw new Error('Project ID required');
+      const response = await api.get(`/projects/${numericProjectId}/fonnte`);
       return response.data.data;
     },
-    enabled: !!projectId,
+    enabled: !!numericProjectId,
   });
 };
 
 export const useUpdateFonnteSettings = (projectId: number | string | undefined) => {
   const queryClient = useQueryClient();
+  const numericProjectId = projectId ? Number(projectId) : undefined;
 
   return useMutation({
     mutationFn: async (payload: Partial<FonnteSettingsData>) => {
-      if (!projectId) throw new Error('Project ID required');
-      const response = await api.post(`/projects/${projectId}/fonnte`, payload);
+      if (!numericProjectId) throw new Error('Project ID required');
+      const response = await api.post(`/projects/${numericProjectId}/fonnte`, payload);
       return response.data.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fonnte-settings', projectId] });
+      if (numericProjectId) {
+        queryClient.invalidateQueries({ queryKey: fonnteKeys.detail(numericProjectId) });
+      }
     },
   });
 };
 
 export const useCheckFonnteDevice = (projectId: number | string | undefined) => {
   const queryClient = useQueryClient();
+  const numericProjectId = projectId ? Number(projectId) : undefined;
 
   return useMutation({
     mutationFn: async (params?: { api_token?: string; api_endpoint?: string }) => {
-      if (!projectId) throw new Error('Project ID required');
-      const response = await api.post(`/projects/${projectId}/fonnte/check-device`, params || {});
+      if (!numericProjectId) throw new Error('Project ID required');
+      const response = await api.post(`/projects/${numericProjectId}/fonnte/check-device`, params || {});
       return response.data.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fonnte-settings', projectId] });
+      if (numericProjectId) {
+        queryClient.invalidateQueries({ queryKey: fonnteKeys.detail(numericProjectId) });
+      }
     },
   });
 };
 
 export const useTestSendFonnte = (projectId: number | string | undefined) => {
+  const numericProjectId = projectId ? Number(projectId) : undefined;
+
   return useMutation({
     mutationFn: async (target: string) => {
-      if (!projectId) throw new Error('Project ID required');
-      const response = await api.post(`/projects/${projectId}/fonnte/test-send`, { target });
+      if (!numericProjectId) throw new Error('Project ID required');
+      const response = await api.post(`/projects/${numericProjectId}/fonnte/test-send`, { target });
       return response.data;
     },
   });

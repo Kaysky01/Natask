@@ -71,12 +71,6 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   const [title, setTitle] = useState('');
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [description, setDescription] = useState('');
-  const [dueDate, setDueDate] = useState('');
-  const [draftStatusId, setDraftStatusId] = useState<number | null>(null);
-  const [draftPriority, setDraftPriority] = useState<Priority>('medium');
-  const [draftAssigneeIds, setDraftAssigneeIds] = useState<number[]>([]);
-  const [draftLabelIds, setDraftLabelIds] = useState<number[]>([]);
-  const [draftChecklistItems, setDraftChecklistItems] = useState<Record<number, boolean>>({});
   const [newComment, setNewComment] = useState('');
 
   // Checklist items inline inputs keyed by checklistId
@@ -119,14 +113,6 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     if (task) {
       setTitle(task.title);
       setDescription(task.description || '');
-      setDueDate(task.due_date ? task.due_date.split('T')[0] : '');
-      setDraftStatusId(task.status_id);
-      setDraftPriority(task.priority);
-      setDraftAssigneeIds(task.assignees?.map((assignee) => assignee.id) || []);
-      setDraftLabelIds(task.labels?.map((label) => label.id) || []);
-      setDraftChecklistItems(Object.fromEntries(
-        (task.checklists || []).flatMap((checklist) => checklist.items || []).map((item) => [item.id, item.completed])
-      ));
       setIsEditingTitle(false);
       setIsEditingDescription(false);
       setShowMemberPicker(false);
@@ -147,87 +133,58 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
       setIsEditingTitle(false);
       return;
     }
-    await updateTask.mutateAsync({
-      id: task.id,
-      data: { title: title.trim() },
-    });
-    setIsEditingTitle(false);
-  };
-
-  const handleSaveDescription = async () => {
-    await updateTask.mutateAsync({
-      id: task.id,
-      data: { description },
-    });
-    setIsEditingDescription(false);
-  };
-
-  const handleStatusChange = async (newStatusId: number) => {
-    setDraftStatusId(newStatusId);
-  };
-
-  const handlePriorityChange = (newPriority: Priority) => {
-    setDraftPriority(newPriority);
-  };
-
-  const handleDueDateChange = (dateVal: string) => {
-    setDueDate(dateVal);
-  };
-
-  const handleSaveMetadata = async () => {
     try {
-      if (draftStatusId && draftStatusId !== (taskData?.status_id ?? task.status_id)) {
-        await updateTaskStatus.mutateAsync({ taskId: task.id, statusId: draftStatusId });
-      }
-      if (draftPriority !== (taskData?.priority ?? task.priority) || dueDate !== (taskData?.due_date ? taskData.due_date.split('T')[0] : '')) {
-        await updateTask.mutateAsync({
-          id: task.id,
-          data: { priority: draftPriority, due_date: dueDate || undefined },
-        });
-      }
-      const currentAssigneeIds = taskData?.assignees?.map((assignee) => assignee.id) || [];
-      await Promise.all([
-        ...draftAssigneeIds.filter((userId) => !currentAssigneeIds.includes(userId)).map((userId) =>
-          assignMember.mutateAsync({ taskId: task.id, userId })
-        ),
-        ...currentAssigneeIds.filter((userId) => !draftAssigneeIds.includes(userId)).map((userId) =>
-          unassignMember.mutateAsync({ taskId: task.id, userId })
-        ),
-      ]);
-      const checklistItems = (taskData?.checklists || []).flatMap((checklist) => checklist.items || []);
-      await Promise.all(checklistItems
-        .filter((item) => draftChecklistItems[item.id] !== undefined && draftChecklistItems[item.id] !== item.completed)
-        .map((item) => toggleChecklistItem.mutateAsync({
-          itemId: item.id,
-          completed: draftChecklistItems[item.id],
-          taskId: task.id,
-        })));
-      const currentLabelIds = taskData?.labels?.map((label) => label.id) || [];
-      await Promise.all([
-        ...draftLabelIds.filter((labelId) => !currentLabelIds.includes(labelId)).map((labelId) =>
-          attachLabels.mutateAsync({ taskId: task.id, labelIds: [labelId] })
-        ),
-        ...currentLabelIds.filter((labelId) => !draftLabelIds.includes(labelId)).map((labelId) =>
-          detachLabel.mutateAsync({ taskId: task.id, labelId })
-        ),
-      ]);
-      setShowDatesPicker(false);
-      toastSuccess('Task changes saved.', 'Saved');
+      await updateTask.mutateAsync({
+        id: task.id,
+        data: { title: title.trim() },
+      });
+      setIsEditingTitle(false);
     } catch (err: any) {
-      toastError(err?.response?.data?.message || 'Could not save task changes.', 'Save failed');
+      toastError(err?.response?.data?.message || 'Could not update task title.', 'Error');
     }
   };
 
-  const handleCancelMetadata = () => {
-    setDraftStatusId(taskData?.status_id ?? task.status_id);
-    setDraftPriority(taskData?.priority ?? task.priority);
-    setDraftAssigneeIds(taskData?.assignees?.map((assignee) => assignee.id) || []);
-    setDraftLabelIds(taskData?.labels?.map((label) => label.id) || []);
-    setDraftChecklistItems(Object.fromEntries(
-      (taskData?.checklists || []).flatMap((checklist) => checklist.items || []).map((item) => [item.id, item.completed])
-    ));
-    setDueDate(taskData?.due_date ? taskData.due_date.split('T')[0] : '');
-    setShowDatesPicker(false);
+  const handleSaveDescription = async () => {
+    try {
+      await updateTask.mutateAsync({
+        id: task.id,
+        data: { description },
+      });
+      setIsEditingDescription(false);
+    } catch (err: any) {
+      toastError(err?.response?.data?.message || 'Could not update task description.', 'Error');
+    }
+  };
+
+  const handleStatusChange = async (newStatusId: number) => {
+    try {
+      await updateTaskStatus.mutateAsync({ taskId: task.id, statusId: newStatusId });
+    } catch (err: any) {
+      toastError(err?.response?.data?.message || 'Could not update status.', 'Error');
+    }
+  };
+
+  const handlePriorityChange = async (newPriority: Priority) => {
+    try {
+      await updateTask.mutateAsync({
+        id: task.id,
+        data: { priority: newPriority },
+      });
+    } catch (err: any) {
+      toastError(err?.response?.data?.message || 'Could not update priority.', 'Error');
+    }
+  };
+
+  const handleDueDateChange = async (dateVal: string) => {
+    try {
+      await updateTask.mutateAsync({
+        id: task.id,
+        data: { due_date: dateVal || undefined },
+      });
+      setShowDatesPicker(false);
+    } catch (err: any) {
+      toastError(err?.response?.data?.message || 'Could not update deadline.', 'Error');
+    }
   };
 
   const handleDeleteTask = async () => {
@@ -241,53 +198,93 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   const handleCreateChecklist = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newChecklistName.trim()) return;
-    await createChecklist.mutateAsync({
-      taskId: task.id,
-      title: newChecklistName.trim(),
-    });
-    setNewChecklistName('Checklist');
-    setShowChecklistCreator(false);
+    try {
+      await createChecklist.mutateAsync({
+        taskId: task.id,
+        title: newChecklistName.trim(),
+        projectId: task.project_id,
+      });
+      setNewChecklistName('Checklist');
+      setShowChecklistCreator(false);
+    } catch (err: any) {
+      toastError(err?.response?.data?.message || 'Could not create checklist.', 'Error');
+    }
   };
 
   const handleDeleteChecklist = async (checklistId: number) => {
     if (window.confirm('Delete this checklist?')) {
-      await deleteChecklist.mutateAsync({ checklistId, taskId: task.id });
+      try {
+        await deleteChecklist.mutateAsync({ checklistId, taskId: task.id, projectId: task.project_id });
+      } catch (err: any) {
+        toastError(err?.response?.data?.message || 'Could not delete checklist.', 'Error');
+      }
     }
   };
 
-  const handleToggleChecklistItem = (itemId: number, completed: boolean) => {
-    setDraftChecklistItems((current) => ({ ...current, [itemId]: !completed }));
+  const handleToggleChecklistItem = async (itemId: number, completed: boolean) => {
+    try {
+      await toggleChecklistItem.mutateAsync({
+        itemId,
+        completed: !completed,
+        taskId: task.id,
+        projectId: task.project_id,
+      });
+    } catch (err: any) {
+      toastError(err?.response?.data?.message || 'Could not update checklist item.', 'Error');
+    }
   };
 
   const handleAddChecklistItem = async (checklistId: number) => {
     const itemTitle = newItemTitles[checklistId]?.trim();
     if (!itemTitle) return;
 
-    await addChecklistItem.mutateAsync({
-      checklistId,
-      title: itemTitle,
-      taskId: task.id,
-    });
-
-    setNewItemTitles((prev) => ({ ...prev, [checklistId]: '' }));
+    try {
+      await addChecklistItem.mutateAsync({
+        checklistId,
+        title: itemTitle,
+        taskId: task.id,
+        projectId: task.project_id,
+      });
+      setNewItemTitles((prev) => ({ ...prev, [checklistId]: '' }));
+    } catch (err: any) {
+      toastError(err?.response?.data?.message || 'Could not add checklist item.', 'Error');
+    }
   };
 
   const handleDeleteChecklistItem = async (itemId: number) => {
-    await deleteChecklistItem.mutateAsync({ itemId, taskId: task.id });
+    try {
+      await deleteChecklistItem.mutateAsync({ itemId, taskId: task.id, projectId: task.project_id });
+    } catch (err: any) {
+      toastError(err?.response?.data?.message || 'Could not delete checklist item.', 'Error');
+    }
   };
 
   // Member assignment toggle
-  const handleToggleMember = (userId: number) => {
-    setDraftAssigneeIds((current) => current.includes(userId)
-      ? current.filter((id) => id !== userId)
-      : [...current, userId]);
+  const handleToggleMember = async (userId: number) => {
+    const isAssigned = (taskData?.assignees || []).some((a) => (a.id === userId || (a as any).user_id === userId));
+    try {
+      if (isAssigned) {
+        await unassignMember.mutateAsync({ taskId: task.id, userId, projectId: task.project_id });
+      } else {
+        await assignMember.mutateAsync({ taskId: task.id, userId, projectId: task.project_id });
+      }
+    } catch (err: any) {
+      toastError(err?.response?.data?.message || 'Could not update assignee.', 'Error');
+    }
   };
 
   // Label toggle
-  const handleToggleLabel = (labelId: number) => {
-    setDraftLabelIds((current) => current.includes(labelId)
-      ? current.filter((id) => id !== labelId)
-      : [...current, labelId]);
+  const handleToggleLabel = async (labelId: number) => {
+    const isAttached = (taskData?.labels || []).some((l) => l.id === labelId);
+    try {
+      if (isAttached) {
+        await detachLabel.mutateAsync({ taskId: task.id, labelId, projectId: task.project_id });
+      } else {
+        await attachLabels.mutateAsync({ taskId: task.id, labelIds: [labelId], projectId: task.project_id });
+      }
+    } catch (err: any) {
+      toastError(err?.response?.data?.message || 'Could not update label.', 'Error');
+    }
   };
 
   const handleCreateLabel = async (event: React.FormEvent) => {
@@ -320,7 +317,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     }
 
     try {
-      await uploadAttachment.mutateAsync({ taskId: task.id, file });
+      await uploadAttachment.mutateAsync({ taskId: task.id, file, projectId: task.project_id });
       toastSuccess('Berkas berhasil dilampirkan.', 'Upload berhasil');
     } catch (err: any) {
       toastError(handleApiError(err), 'Gagal mengunggah berkas');
@@ -332,7 +329,11 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
   const handleDeleteAttachment = async (attachmentId: number) => {
     if (window.confirm('Remove this attachment?')) {
-      await deleteAttachment.mutateAsync({ taskId: task.id, attachmentId });
+      try {
+        await deleteAttachment.mutateAsync({ taskId: task.id, attachmentId, projectId: task.project_id });
+      } catch (err: any) {
+        toastError(err?.response?.data?.message || 'Could not delete attachment.', 'Error');
+      }
     }
   };
 
@@ -355,11 +356,16 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     e.preventDefault();
     if (!newComment.trim()) return;
 
-    await addComment.mutateAsync({
-      taskId: task.id,
-      body: newComment.trim(),
-    });
-    setNewComment('');
+    try {
+      await addComment.mutateAsync({
+        taskId: task.id,
+        body: newComment.trim(),
+        projectId: task.project_id,
+      });
+      setNewComment('');
+    } catch (err: any) {
+      toastError(err?.response?.data?.message || 'Could not post comment.', 'Error');
+    }
   };
 
   const isOverdue = taskData?.due_date && new Date(taskData.due_date) < new Date();
@@ -415,7 +421,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
               <span>in list</span>
               {!readOnly ? (
                 <select
-                  value={draftStatusId ?? taskData?.status_id ?? task.status_id}
+                  value={taskData?.status_id ?? task.status_id}
                   onChange={(e) => handleStatusChange(Number(e.target.value))}
                   className="font-semibold text-text bg-background/80 border border-border rounded px-2 py-0.5 text-xs hover:border-primary/40 focus:outline-none"
                 >
@@ -607,7 +613,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             <div className="space-y-6">
               {taskData?.checklists?.map((checklist) => {
                 const items = checklist.items || [];
-                const completedCount = items.filter((item) => draftChecklistItems[item.id] ?? item.completed).length;
+                const completedCount = items.filter((item) => item.completed).length;
                 const progressPct =
                   items.length > 0
                     ? Math.round((completedCount / items.length) * 100)
@@ -667,15 +673,15 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                             <input
                               type="checkbox"
                               disabled={readOnly}
-                              checked={draftChecklistItems[item.id] ?? item.completed}
+                              checked={item.completed}
                               onChange={() =>
-                                !readOnly && handleToggleChecklistItem(item.id, draftChecklistItems[item.id] ?? item.completed)
+                                !readOnly && handleToggleChecklistItem(item.id, item.completed)
                               }
                               className={`rounded border-border text-primary focus:ring-primary w-4 h-4 ${readOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                             />
                             <span
                               className={
-                                (draftChecklistItems[item.id] ?? item.completed)
+                                item.completed
                                   ? 'line-through text-muted transition-all'
                                   : 'text-text font-medium transition-all'
                               }
@@ -957,7 +963,9 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                             const memberId = m.user_id ?? m.pivot?.user_id ?? m.id;
                             const memberName = m.user?.name ?? m.name ?? 'User';
                             const memberAvatar = m.user?.avatar ?? m.avatar;
-                            const isSelected = draftAssigneeIds.includes(memberId);
+                            const isSelected = (taskData?.assignees || []).some(
+                              (a) => a.id === memberId || (a as any).user_id === memberId
+                            );
                             return (
                               <button
                                 key={m.id}
@@ -1007,7 +1015,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                         <div className="space-y-1.5 max-h-48 overflow-y-auto">
                           {projectLabels.map((lbl) => {
-                            const isAttached = draftLabelIds.includes(lbl.id);
+                            const isAttached = (taskData?.labels || []).some((l) => l.id === lbl.id);
                             return (
                               <button
                                 key={lbl.id}
@@ -1129,12 +1137,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                         <input
                           type="date"
-                          value={dueDate}
+                          value={taskData?.due_date ? taskData.due_date.slice(0, 10) : ''}
                           onChange={(e) => handleDueDateChange(e.target.value)}
                           className="w-full text-xs bg-background border border-border rounded-lg p-2 text-text focus:outline-none focus:ring-1 focus:ring-primary"
                         />
 
-                        {dueDate && (
+                        {taskData?.due_date && (
                           <Button
                             type="button"
                             variant="ghost"
@@ -1186,7 +1194,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                       Priority
                     </label>
                     <select
-                      value={draftPriority}
+                      value={taskData?.priority || 'medium'}
                       onChange={(e) => handlePriorityChange(e.target.value as Priority)}
                       className="w-full text-xs bg-background border border-border rounded-xl p-2 text-text focus:outline-none"
                     >
@@ -1195,15 +1203,6 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                       <option value="medium">Medium</option>
                       <option value="low">Low</option>
                     </select>
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-1">
-                    <Button type="button" variant="primary" size="sm" onClick={handleSaveMetadata}>
-                      Save changes
-                    </Button>
-                    <Button type="button" variant="ghost" size="sm" onClick={handleCancelMetadata}>
-                      Cancel
-                    </Button>
                   </div>
 
                   {/* Delete Card Button */}

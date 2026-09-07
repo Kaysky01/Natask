@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { dashboardKeys } from '../api/queryKeys';
 import type { Project, Task, Activity } from '../types';
 
 export interface DashboardData {
@@ -16,7 +17,7 @@ export interface DashboardData {
 
 export const useDashboard = () => {
   return useQuery({
-    queryKey: ['dashboard'],
+    queryKey: dashboardKeys.all,
     queryFn: async () => {
       const response = await api.get('/dashboard');
       return response.data.data as DashboardData;
