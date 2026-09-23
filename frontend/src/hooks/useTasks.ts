@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { taskKeys, projectKeys, dashboardKeys } from '../api/queryKeys';
-import type { Task, CreateTaskData, UpdateTaskData } from '../types';
+import type { Task, CreateTaskData, UpdateTaskData, ExtendDeadlineData } from '../types';
 
 export const useTasks = (params?: {
   project_id?: number | string;
@@ -66,6 +66,32 @@ export const useUpdateTask = () => {
     mutationFn: async ({ id, data }: { id: number | string; data: UpdateTaskData }) => {
       const numericId = Number(id);
       const response = await api.put(`/tasks/${numericId}`, data);
+      return response.data.data as Task;
+    },
+    onSuccess: (updatedTask) => {
+      const numericTaskId = Number(updatedTask.id);
+      const numericProjectId = Number(updatedTask.project_id);
+
+      queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      queryClient.invalidateQueries({ queryKey: taskKeys.detail(numericTaskId) });
+      if (numericProjectId) {
+        queryClient.invalidateQueries({ queryKey: projectKeys.detail(numericProjectId) });
+      }
+      queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
+
+      queryClient.setQueryData(taskKeys.detail(numericTaskId), updatedTask);
+    },
+  });
+};
+
+export const useExtendTaskDeadline = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number | string; data: ExtendDeadlineData }) => {
+      const numericId = Number(id);
+      const response = await api.post(`/tasks/${numericId}/extend-deadline`, data);
       return response.data.data as Task;
     },
     onSuccess: (updatedTask) => {

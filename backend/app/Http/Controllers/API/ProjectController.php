@@ -146,6 +146,7 @@ class ProjectController extends Controller
                     'assignees:id,name,email,avatar,phone',
                     'labels',
                     'checklists.items',
+                    'dateHistories',
                 ])
                 ->withCount(['comments', 'attachments'])
                 ->orderBy('position');

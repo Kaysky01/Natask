@@ -78,6 +78,24 @@ export interface Task {
   attachments?: Attachment[];
   comments_count?: number;
   attachments_count?: number;
+  date_histories?: TaskDateHistory[];
+  dateHistories?: TaskDateHistory[];
+}
+
+export interface TaskDateHistory {
+  id: number;
+  task_id: number;
+  user_id: number;
+  type: 'start_date_changed' | 'due_date_changed' | 'deadline_extended' | 'dates_set';
+  old_start_date?: string | null;
+  new_start_date?: string | null;
+  old_due_date?: string | null;
+  new_due_date?: string | null;
+  extension_days?: number | null;
+  reason?: string | null;
+  created_at: string;
+  updated_at?: string;
+  user?: User;
 }
 
 export interface TaskStatus {
@@ -209,13 +227,21 @@ export interface CreateTaskData {
   status_id?: number;
 }
 
-export interface UpdateTaskData extends Partial<CreateTaskData> {}
+export interface UpdateTaskData extends Partial<CreateTaskData> {
+  date_change_reason?: string;
+}
+
+export interface ExtendDeadlineData {
+  extension_days?: number;
+  new_due_date?: string;
+  reason?: string;
+}
 
 // Theme and UI types
 export type Theme = 'light' | 'dark' | 'system';
 
 export interface ViewMode {
-  type: 'board' | 'list' | 'calendar' | 'overview';
+  type: 'board' | 'list' | 'timeline' | 'calendar' | 'overview';
 }
 
 // Auth types

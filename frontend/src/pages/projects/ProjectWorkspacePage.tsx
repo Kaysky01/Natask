@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Sparkles,
   MessageSquare,
+  CalendarRange,
 } from 'lucide-react';
 import { useProject, useRemoveProjectMember, useDeleteProject, useCreateProjectInvitation, useUpdateProjectMemberRole } from '../../hooks/useProjects';
 import { useUpdateTaskStatus } from '../../hooks/useTasks';
@@ -27,6 +28,7 @@ import { Button } from '../../components/ui/Button';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { useToast } from '../../components/ui/Toast';
 import { CalendarView } from '../../components/calendar/CalendarView';
+import { TimelineView } from '../../components/timeline/TimelineView';
 import { useAuthStore } from '../../stores/authStore';
 import { useProjectRealtime } from '../../hooks/useProjectRealtime';
 import type { Task, TaskStatus, User, ProjectRole } from '../../types';
@@ -35,7 +37,7 @@ import type { Task, TaskStatus, User, ProjectRole } from '../../types';
 export const ProjectWorkspacePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'board' | 'list' | 'calendar' | 'overview'>('board');
+  const [activeTab, setActiveTab] = useState<'board' | 'list' | 'timeline' | 'calendar' | 'overview'>('board');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -275,6 +277,7 @@ export const ProjectWorkspacePage: React.FC = () => {
           {([
             { key: 'board', label: 'Board', icon: FolderKanban },
             { key: 'list', label: 'List', icon: ListTodo },
+            { key: 'timeline', label: 'Timeline', icon: CalendarRange },
             { key: 'calendar', label: 'Calendar', icon: Calendar },
             { key: 'overview', label: 'Overview', icon: Info },
           ] as const).map(({ key, label, icon: Icon }) => (
@@ -393,6 +396,19 @@ export const ProjectWorkspacePage: React.FC = () => {
               </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Timeline Tab */}
+        {activeTab === 'timeline' && (
+          <div className="flex-1 flex flex-col min-h-0 w-full overflow-hidden">
+            <TimelineView
+              tasks={project.tasks || []}
+              onTaskClick={(task) => {
+                setSelectedTask(task);
+                setIsTaskModalOpen(true);
+              }}
+            />
           </div>
         )}
 

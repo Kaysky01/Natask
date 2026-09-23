@@ -13,7 +13,9 @@ use App\Models\ChecklistItem;
 use App\Models\Comment;
 use App\Models\Attachment;
 use App\Models\Activity;
+use App\Models\TaskDateHistory;
 use App\Events\ProjectChanged;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
@@ -177,6 +179,20 @@ class TaskController extends Controller
             'task_id' => $task->id,
             'task_title' => $task->title,
         ]);
+
+        if ($task->start_date || $task->due_date) {
+            TaskDateHistory::create([
+                'task_id' => $task->id,
+                'user_id' => $request->user()->id,
+                'type' => 'dates_set',
+                'old_start_date' => null,
+                'new_start_date' => $task->start_date ? Carbon::parse($task->start_date)->format('Y-m-d') : null,
+                'old_due_date' => null,
+                'new_due_date' => $task->due_date ? Carbon::parse($task->due_date)->format('Y-m-d') : null,
+                'reason' => 'Tanggal awal ditetapkan saat pembuatan task',
+            ]);
+        }
+
         ProjectChanged::dispatch($project, 'task.created', $task->id);
 
         $task->load([
@@ -214,6 +230,7 @@ class TaskController extends Controller
             'checklists.items',
             'comments.user:id,name,email,avatar,phone',
             'attachments.user:id,name,email,avatar,phone',
+            'dateHistories',
         ]);
 
         return response()->json([
@@ -241,6 +258,7 @@ class TaskController extends Controller
             'assignee_ids.*' => 'integer|exists:users,id',
             'label_ids' => 'nullable|array',
             'label_ids.*' => 'integer|exists:labels,id',
+            'date_change_reason' => 'nullable|string|max:500',
         ]);
 
         if ($validator->fails()) {
@@ -254,10 +272,32 @@ class TaskController extends Controller
         $this->validateProjectRelations($task->project, $request->status_id, $request->assignee_ids, $request->label_ids);
 
         $oldStatus = $task->status;
+        $oldStartDate = $task->start_date ? Carbon::parse($task->start_date)->format('Y-m-d') : null;
+        $oldDueDate = $task->due_date ? Carbon::parse($task->due_date)->format('Y-m-d') : null;
 
         $task->update($request->only([
             'title', 'description', 'status_id', 'priority', 'start_date', 'due_date', 'position'
         ]));
+
+        $newStartDate = $task->start_date ? Carbon::parse($task->start_date)->format('Y-m-d') : null;
+        $newDueDate = $task->due_date ? Carbon::parse($task->due_date)->format('Y-m-d') : null;
+
+        if (($request->has('start_date') && $oldStartDate !== $newStartDate) || ($request->has('due_date') && $oldDueDate !== $newDueDate)) {
+            $type = 'due_date_changed';
+            if ($oldStartDate !== $newStartDate && $oldDueDate === $newDueDate) {
+                $type = 'start_date_changed';
+            }
+            TaskDateHistory::create([
+                'task_id' => $task->id,
+                'user_id' => $request->user()->id,
+                'type' => $type,
+                'old_start_date' => $oldStartDate,
+                'new_start_date' => $newStartDate,
+                'old_due_date' => $oldDueDate,
+                'new_due_date' => $newDueDate,
+                'reason' => $request->date_change_reason ?? null,
+            ]);
+        }
 
         if ($request->has('assignee_ids')) {
             $task->assignees()->sync($request->assignee_ids);
@@ -296,11 +336,96 @@ class TaskController extends Controller
             'checklists.items',
             'comments.user:id,name,email,avatar,phone',
             'attachments.user:id,name,email,avatar,phone',
+            'dateHistories',
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Task updated successfully',
+            'data' => $task,
+        ]);
+    }
+
+    /**
+     * Extend task deadline.
+     */
+    public function extendDeadline(Request $request, Task $task): JsonResponse
+    {
+        $this->authorizeTaskAccess($request->user(), $task);
+
+        $validator = Validator::make($request->all(), [
+            'extension_days' => 'nullable|integer|min:1|max:365',
+            'new_due_date' => 'nullable|date',
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $oldDueDate = $task->due_date ? Carbon::parse($task->due_date)->format('Y-m-d') : null;
+        $extensionDays = $request->filled('extension_days') ? (int) $request->extension_days : null;
+
+        if ($request->filled('new_due_date')) {
+            $newDueDate = Carbon::parse($request->new_due_date)->format('Y-m-d');
+            if ($oldDueDate) {
+                $diff = Carbon::parse($oldDueDate)->diffInDays(Carbon::parse($newDueDate), false);
+                $extensionDays = $diff > 0 ? (int) $diff : $extensionDays;
+            }
+        } elseif ($extensionDays) {
+            $baseDate = $oldDueDate ? Carbon::parse($oldDueDate) : Carbon::today();
+            $newDueDate = $baseDate->copy()->addDays($extensionDays)->format('Y-m-d');
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => 'Harap tentukan jumlah hari tambahan atau tanggal batas akhir baru.',
+            ], 422);
+        }
+
+        $task->update([
+            'due_date' => $newDueDate,
+        ]);
+
+        TaskDateHistory::create([
+            'task_id' => $task->id,
+            'user_id' => $request->user()->id,
+            'type' => 'deadline_extended',
+            'old_due_date' => $oldDueDate,
+            'new_due_date' => $newDueDate,
+            'extension_days' => $extensionDays,
+            'reason' => $request->reason,
+        ]);
+
+        Activity::log('deadline_extended', $task->project, $request->user(), [
+            'task_id' => $task->id,
+            'task_title' => $task->title,
+            'old_due_date' => $oldDueDate,
+            'new_due_date' => $newDueDate,
+            'extension_days' => $extensionDays,
+            'reason' => $request->reason,
+        ]);
+
+        ProjectChanged::dispatch($task->project, 'task.updated', $task->id);
+
+        $task->load([
+            'project:id,name,slug',
+            'status',
+            'creator:id,name,email,avatar,phone',
+            'assignees:id,name,email,avatar,phone',
+            'labels',
+            'checklists.items',
+            'comments.user:id,name,email,avatar,phone',
+            'attachments.user:id,name,email,avatar,phone',
+            'dateHistories',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Batas waktu tugas berhasil diperpanjang',
             'data' => $task,
         ]);
     }

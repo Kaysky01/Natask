@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Check, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useCreateTask } from '../../hooks/useTasks';
 import { useToast } from '../ui/Toast';
 import { Button } from '../ui/Button';
@@ -29,6 +29,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [description, setDescription] = useState('');
   const [statusId, setStatusId] = useState<number | ''>('');
   const [priority, setPriority] = useState<Priority>('medium');
+  const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [assigneeIds, setAssigneeIds] = useState<number[]>([]);
   const [labelIds, setLabelIds] = useState<number[]>([]);
@@ -39,6 +40,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       setDescription('');
       setStatusId(statuses[0]?.id || '');
       setPriority('medium');
+      setStartDate('');
       setDueDate('');
       setAssigneeIds([]);
       setLabelIds([]);
@@ -60,6 +62,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         description: description.trim() || undefined,
         status_id: statusId || undefined,
         priority,
+        start_date: startDate || undefined,
         due_date: dueDate || undefined,
         assignee_ids: assigneeIds,
         label_ids: labelIds,
@@ -115,25 +118,64 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-text">Deadline</label>
-            <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="w-full text-xs bg-background border border-border rounded-xl p-2.5 text-text" />
+          {/* Dates: Waktu Mulai & Waktu Berakhir (Deadline) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-text">Waktu Mulai</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                onClick={(e) => {
+                  try {
+                    e.currentTarget.showPicker?.();
+                  } catch {}
+                }}
+                className="w-full text-xs bg-background border border-border rounded-xl p-2.5 text-text cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
+                title="Klik untuk membuka kalender atau ketik langsung"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-text">Waktu Berakhir (Deadline)</label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(event) => setDueDate(event.target.value)}
+                onClick={(e) => {
+                  try {
+                    e.currentTarget.showPicker?.();
+                  } catch {}
+                }}
+                className="w-full text-xs bg-background border border-border rounded-xl p-2.5 text-text cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
+                title="Klik untuk membuka kalender atau ketik langsung"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
             <label className="text-xs font-semibold text-text">Assign to</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-28 overflow-y-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
               {members.map((member) => {
                 const userId = member.user_id ?? member.pivot?.user_id ?? member.id;
                 const userName = member.user?.name ?? member.name ?? 'User';
                 const selected = assigneeIds.includes(userId);
                 return (
-                  <button key={userId} type="button" onClick={() => toggleId(assigneeIds, userId, setAssigneeIds)} className={`flex items-center gap-2 px-2.5 py-2 text-left text-xs rounded-lg border transition-colors ${selected ? 'border-primary bg-primary/10 text-primary' : 'border-border text-text hover:bg-background'}`}>
-                    <span className={`w-4 h-4 rounded border flex items-center justify-center ${selected ? 'bg-primary border-primary text-white' : 'border-border'}`}>
-                      {selected && <Check className="w-3 h-3" />}
-                    </span>
+                  <label
+                    key={userId}
+                    className={`flex items-center gap-2.5 px-3 py-2 text-xs rounded-xl border transition-colors cursor-pointer select-none ${
+                      selected
+                        ? 'border-primary bg-primary/10 text-primary font-medium'
+                        : 'border-border text-text hover:bg-background'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleId(assigneeIds, userId, setAssigneeIds)}
+                      className="w-4 h-4 rounded border-border text-primary focus:ring-primary accent-primary cursor-pointer shrink-0"
+                    />
                     <span className="truncate">{userName}</span>
-                  </button>
+                  </label>
                 );
               })}
             </div>

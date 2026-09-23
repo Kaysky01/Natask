@@ -15,6 +15,9 @@ import {
   Clock,
   Download,
   Loader2,
+  History,
+  ArrowRight,
+  CalendarPlus,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Avatar } from '../ui/Avatar';
@@ -37,6 +40,7 @@ import {
   useUploadAttachment,
   useDeleteAttachment,
   useTask,
+  useExtendTaskDeadline,
 } from '../../hooks/useTasks';
 import { useAuthStore } from '../../stores/authStore';
 import { useToast } from '../ui/Toast';
@@ -86,11 +90,18 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   const [showChecklistCreator, setShowChecklistCreator] = useState(false);
   const [newChecklistName, setNewChecklistName] = useState('Checklist');
   const [showDatesPicker, setShowDatesPicker] = useState(false);
+  const [activeDateTab, setActiveDateTab] = useState<'dates' | 'extend' | 'history'>('dates');
+  const [editStartDate, setEditStartDate] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [extensionDays, setExtensionDays] = useState<number>(3);
+  const [customExtensionDate, setCustomExtensionDate] = useState('');
+  const [extensionReason, setExtensionReason] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Mutations
   const updateTask = useUpdateTask();
+  const extendDeadline = useExtendTaskDeadline();
   const deleteTask = useDeleteTask();
   const updateTaskStatus = useUpdateTaskStatus();
   const toggleChecklistItem = useToggleChecklistItem();
@@ -109,6 +120,11 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   const { data: detailedTask } = useTask(task?.id);
   const taskData = detailedTask || task;
 
+  const dateHistories = taskData?.date_histories || taskData?.dateHistories || [];
+  const extensionHistories = dateHistories.filter((h) => h.type === 'deadline_extended');
+  const totalExtensions = extensionHistories.length;
+  const totalExtensionDays = extensionHistories.reduce((acc, curr) => acc + (curr.extension_days || 0), 0);
+
   useEffect(() => {
     if (task) {
       setTitle(task.title);
@@ -120,8 +136,21 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
       setShowLabelCreator(false);
       setShowChecklistCreator(false);
       setShowDatesPicker(false);
+      setActiveDateTab('dates');
+      setEditStartDate(task.start_date ? task.start_date.slice(0, 10) : '');
+      setEditDueDate(task.due_date ? task.due_date.slice(0, 10) : '');
+      setExtensionDays(3);
+      setCustomExtensionDate('');
+      setExtensionReason('');
     }
   }, [task]);
+
+  useEffect(() => {
+    if (detailedTask) {
+      setEditStartDate(detailedTask.start_date ? detailedTask.start_date.slice(0, 10) : '');
+      setEditDueDate(detailedTask.due_date ? detailedTask.due_date.slice(0, 10) : '');
+    }
+  }, [detailedTask?.start_date, detailedTask?.due_date]);
 
   if (!isOpen || !task) return null;
 
@@ -175,15 +204,44 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     }
   };
 
-  const handleDueDateChange = async (dateVal: string) => {
+  const handleSaveDates = async (newStartDate?: string, newDueDate?: string) => {
     try {
+      const sDate = newStartDate !== undefined ? newStartDate : editStartDate;
+      const dDate = newDueDate !== undefined ? newDueDate : editDueDate;
       await updateTask.mutateAsync({
         id: task.id,
-        data: { due_date: dateVal || undefined },
+        data: {
+          start_date: sDate || undefined,
+          due_date: dDate || undefined,
+        },
       });
+      toastSuccess('Tanggal berhasil diperbarui', 'Tersimpan');
       setShowDatesPicker(false);
     } catch (err: any) {
-      toastError(err?.response?.data?.message || 'Could not update deadline.', 'Error');
+      toastError(err?.response?.data?.message || 'Gagal memperbarui tanggal.', 'Error');
+    }
+  };
+
+  const handleApplyExtension = async () => {
+    try {
+      if (!extensionDays && !customExtensionDate) {
+        toastError('Harap tentukan penambahan hari atau tanggal deadline baru.', 'Perhatian');
+        return;
+      }
+      await extendDeadline.mutateAsync({
+        id: task.id,
+        data: {
+          extension_days: customExtensionDate ? undefined : (extensionDays ? Number(extensionDays) : undefined),
+          new_due_date: customExtensionDate || undefined,
+          reason: extensionReason.trim() || undefined,
+        },
+      });
+      toastSuccess('Batas waktu tugas berhasil diperpanjang', 'Sukses');
+      setExtensionReason('');
+      setCustomExtensionDate('');
+      setActiveDateTab('history');
+    } catch (err: any) {
+      toastError(err?.response?.data?.message || 'Gagal memperpanjang deadline.', 'Error');
     }
   };
 
@@ -505,21 +563,51 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                 </div>
               )}
 
-              {/* Due Date Preview */}
+              {/* Waktu Mulai Preview */}
+              {taskData?.start_date && (
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                    Waktu Mulai
+                  </span>
+                  <div
+                    onClick={() => {
+                      setShowDatesPicker(true);
+                      setActiveDateTab('dates');
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border bg-background border-border text-text cursor-pointer hover:border-primary/40 transition-colors"
+                    title="Klik untuk mengubah waktu mulai"
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-muted" />
+                    <span>
+                      {new Date(taskData.start_date).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Due Date & Extension Preview */}
               {taskData?.due_date && (
                 <div className="space-y-1.5">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                    Due Date
+                    Batas Akhir / Deadline
                   </span>
                   <div
-                    onClick={() => setShowDatesPicker(true)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border cursor-pointer ${
+                    onClick={() => {
+                      setShowDatesPicker(true);
+                      setActiveDateTab('dates');
+                    }}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border cursor-pointer transition-colors ${
                       currentStatus?.name.toLowerCase() === 'done'
                         ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
                         : isOverdue
                         ? 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400'
-                        : 'bg-background border-border text-text'
+                        : 'bg-background border-border text-text hover:border-primary/40'
                     }`}
+                    title="Klik untuk melihat atau mengubah deadline"
                   >
                     <Clock className="w-3.5 h-3.5" />
                     <span>
@@ -530,8 +618,16 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                       })}
                     </span>
                     {isOverdue && currentStatus?.name.toLowerCase() !== 'done' && (
-                      <span className="text-[10px] uppercase font-bold bg-rose-500 text-white px-1 rounded">
+                      <span className="text-[10px] uppercase font-bold bg-rose-500 text-white px-1.5 py-0.2 rounded">
                         Overdue
+                      </span>
+                    )}
+                    {totalExtensions > 0 && (
+                      <span
+                        className="text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded-full flex items-center gap-1"
+                        title={`Diperpanjang ${totalExtensions} kali (+${totalExtensionDays} hari)`}
+                      >
+                        +{totalExtensionDays}h ({totalExtensions}x)
                       </span>
                     )}
                   </div>
@@ -958,7 +1054,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                           </button>
                         </div>
 
-                        <div className="space-y-1 max-h-48 overflow-y-auto">
+                        <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
                           {members.map((m) => {
                             const memberId = m.user_id ?? m.pivot?.user_id ?? m.id;
                             const memberName = m.user?.name ?? m.name ?? 'User';
@@ -967,12 +1063,19 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                               (a) => a.id === memberId || (a as any).user_id === memberId
                             );
                             return (
-                              <button
+                              <label
                                 key={m.id}
-                                onClick={() => handleToggleMember(memberId)}
-                                className="w-full flex items-center justify-between p-1.5 hover:bg-background rounded-lg text-xs transition-colors"
+                                className={`w-full flex items-center justify-between p-2 rounded-lg text-xs transition-colors cursor-pointer select-none ${
+                                  isSelected ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-background text-text'
+                                }`}
                               >
-                                <div className="flex items-center gap-2 truncate">
+                                <div className="flex items-center gap-2.5 truncate">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => handleToggleMember(memberId)}
+                                    className="w-4 h-4 rounded border-border text-primary focus:ring-primary accent-primary cursor-pointer shrink-0"
+                                  />
                                   <Avatar
                                     name={memberName}
                                     src={memberAvatar}
@@ -980,10 +1083,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                   />
                                   <span className="truncate">{memberName}</span>
                                 </div>
-                                {isSelected && (
-                                  <Check className="w-3.5 h-3.5 text-primary shrink-0" />
-                                )}
-                              </button>
+                              </label>
                             );
                           })}
                         </div>
@@ -1113,45 +1213,346 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     )}
                   </div>
 
-                  {/* Dates Picker Button */}
+                  {/* Dates & Deadline Picker Button & Popover */}
                   <div className="relative">
                     <button
                       onClick={() => setShowDatesPicker(!showDatesPicker)}
-                      className="w-full flex items-center gap-2 px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors"
+                      className="w-full flex items-center justify-between px-3 py-2 bg-background hover:bg-surface border border-border rounded-xl text-xs font-semibold text-text transition-colors"
                     >
-                      <Calendar className="w-3.5 h-3.5 text-muted" />
-                      Set deadline
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-3.5 h-3.5 text-muted" />
+                        <span>Waktu & Deadline</span>
+                      </div>
+                      {totalExtensions > 0 && (
+                        <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.2 rounded-full">
+                          +{totalExtensionDays}h
+                        </span>
+                      )}
                     </button>
 
                     {showDatesPicker && (
-                      <div className="absolute right-0 top-10 z-40 w-60 bg-surface border border-border rounded-xl shadow-xl p-3 space-y-2.5 animate-in fade-in zoom-in-95 duration-100">
-                        <div className="flex items-center justify-between border-b border-border pb-1.5">
-                          <span className="text-xs font-bold text-text">Due Date</span>
+                      <div className="absolute right-0 top-10 z-40 w-80 sm:w-96 bg-surface border border-border rounded-2xl shadow-2xl p-3.5 space-y-3 animate-in fade-in zoom-in-95 duration-100">
+                        {/* Header */}
+                        <div className="flex items-center justify-between border-b border-border pb-2">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-4 h-4 text-primary" />
+                            <span className="text-xs font-bold text-text">Pengaturan Waktu & Deadline</span>
+                          </div>
                           <button
                             onClick={() => setShowDatesPicker(false)}
-                            className="text-muted hover:text-text"
+                            className="text-muted hover:text-text p-1 rounded-lg"
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
 
-                        <input
-                          type="date"
-                          value={taskData?.due_date ? taskData.due_date.slice(0, 10) : ''}
-                          onChange={(e) => handleDueDateChange(e.target.value)}
-                          className="w-full text-xs bg-background border border-border rounded-lg p-2 text-text focus:outline-none focus:ring-1 focus:ring-primary"
-                        />
-
-                        {taskData?.due_date && (
-                          <Button
+                        {/* Navigation Tabs */}
+                        <div className="flex border-b border-border text-[11px] font-semibold gap-1">
+                          <button
                             type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="w-full text-xs text-rose-500 h-7"
-                            onClick={() => handleDueDateChange('')}
+                            onClick={() => setActiveDateTab('dates')}
+                            className={`flex-1 pb-2 text-center border-b-2 transition-colors ${
+                              activeDateTab === 'dates'
+                                ? 'border-primary text-primary font-bold'
+                                : 'border-transparent text-muted hover:text-text'
+                            }`}
                           >
-                            Remove date
-                          </Button>
+                            Tanggal
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setActiveDateTab('extend')}
+                            className={`flex-1 pb-2 text-center border-b-2 transition-colors flex items-center justify-center gap-1 ${
+                              activeDateTab === 'extend'
+                                ? 'border-primary text-primary font-bold'
+                                : 'border-transparent text-muted hover:text-text'
+                            }`}
+                          >
+                            <CalendarPlus className="w-3 h-3" />
+                            <span>Tambah Waktu</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setActiveDateTab('history')}
+                            className={`flex-1 pb-2 text-center border-b-2 transition-colors flex items-center justify-center gap-1 ${
+                              activeDateTab === 'history'
+                                ? 'border-primary text-primary font-bold'
+                                : 'border-transparent text-muted hover:text-text'
+                            }`}
+                          >
+                            <History className="w-3 h-3" />
+                            <span>Riwayat</span>
+                            {dateHistories.length > 0 && (
+                              <span className="px-1.5 py-0.2 rounded-full bg-primary/10 text-primary text-[10px] font-bold">
+                                {dateHistories.length}
+                              </span>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Tab 1: Tanggal (Start Date & Due Date) */}
+                        {activeDateTab === 'dates' && (
+                          <div className="space-y-3 pt-1">
+                            <div className="space-y-1">
+                              <label className="text-[11px] font-semibold text-text">Waktu Mulai</label>
+                              <input
+                                type="date"
+                                value={editStartDate}
+                                onChange={(e) => setEditStartDate(e.target.value)}
+                                onClick={(e) => {
+                                  try {
+                                    e.currentTarget.showPicker?.();
+                                  } catch {}
+                                }}
+                                className="w-full text-xs bg-background border border-border rounded-xl p-2.5 text-text cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
+                                title="Klik untuk membuka kalender atau ketik langsung"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[11px] font-semibold text-text">Batas Akhir / Deadline</label>
+                              <input
+                                type="date"
+                                value={editDueDate}
+                                onChange={(e) => setEditDueDate(e.target.value)}
+                                onClick={(e) => {
+                                  try {
+                                    e.currentTarget.showPicker?.();
+                                  } catch {}
+                                }}
+                                className="w-full text-xs bg-background border border-border rounded-xl p-2.5 text-text cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
+                                title="Klik untuk membuka kalender atau ketik langsung"
+                              />
+                            </div>
+
+                            {/* Quick Presets for Deadline */}
+                            <div className="flex items-center gap-1.5 pt-1">
+                              <span className="text-[10px] text-muted">Cepat:</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const today = new Date().toISOString().slice(0, 10);
+                                  setEditDueDate(today);
+                                }}
+                                className="text-[10px] font-medium px-2 py-1 bg-background hover:bg-surface border border-border rounded-lg text-text"
+                              >
+                                Hari Ini
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const tmrw = new Date();
+                                  tmrw.setDate(tmrw.getDate() + 1);
+                                  setEditDueDate(tmrw.toISOString().slice(0, 10));
+                                }}
+                                className="text-[10px] font-medium px-2 py-1 bg-background hover:bg-surface border border-border rounded-lg text-text"
+                              >
+                                Besok
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextWeek = new Date();
+                                  nextWeek.setDate(nextWeek.getDate() + 7);
+                                  setEditDueDate(nextWeek.toISOString().slice(0, 10));
+                                }}
+                                className="text-[10px] font-medium px-2 py-1 bg-background hover:bg-surface border border-border rounded-lg text-text"
+                              >
+                                +1 Minggu
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-2 pt-2 border-t border-border">
+                              <Button
+                                type="button"
+                                variant="primary"
+                                size="sm"
+                                className="flex-1 text-xs h-8"
+                                onClick={() => handleSaveDates()}
+                                disabled={updateTask.isPending}
+                                isLoading={updateTask.isPending}
+                              >
+                                Simpan Tanggal
+                              </Button>
+                              {(taskData?.start_date || taskData?.due_date) && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-xs text-rose-500 hover:bg-rose-500/10 h-8 px-2.5"
+                                  onClick={() => {
+                                    setEditStartDate('');
+                                    setEditDueDate('');
+                                    handleSaveDates('', '');
+                                  }}
+                                  disabled={updateTask.isPending}
+                                >
+                                  Hapus
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Tab 2: Tambahan Waktu (Deadline Extension) */}
+                        {activeDateTab === 'extend' && (
+                          <div className="space-y-3 pt-1">
+                            <div className="p-2.5 bg-background border border-border/80 rounded-xl space-y-1 text-xs">
+                              <span className="text-[10px] uppercase font-bold text-muted block">Deadline Saat Ini</span>
+                              <span className="font-semibold text-text">
+                                {taskData?.due_date ? new Date(taskData.due_date).toLocaleDateString(undefined, {
+                                  weekday: 'short',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric'
+                                }) : 'Belum ditetapkan'}
+                              </span>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-semibold text-text">Pilih Tambahan Waktu</label>
+                              <div className="grid grid-cols-4 gap-1.5">
+                                {[1, 3, 7, 14].map((days) => (
+                                  <button
+                                    key={days}
+                                    type="button"
+                                    onClick={() => {
+                                      setExtensionDays(days);
+                                      setCustomExtensionDate('');
+                                    }}
+                                    className={`py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                                      extensionDays === days && !customExtensionDate
+                                        ? 'bg-primary text-white border-primary shadow-xs'
+                                        : 'bg-background border-border text-text hover:bg-surface'
+                                    }`}
+                                  >
+                                    +{days} Hari
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[11px] font-semibold text-text">Atau Pilih Tanggal Deadline Baru</label>
+                              <input
+                                type="date"
+                                value={customExtensionDate}
+                                onChange={(e) => {
+                                  setCustomExtensionDate(e.target.value);
+                                  setExtensionDays(0);
+                                }}
+                                onClick={(e) => {
+                                  try {
+                                    e.currentTarget.showPicker?.();
+                                  } catch {}
+                                }}
+                                className="w-full text-xs bg-background border border-border rounded-xl p-2 text-text cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
+                                title="Klik untuk membuka kalender atau ketik langsung"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[11px] font-semibold text-text">Alasan Penambahan Waktu (Opsional)</label>
+                              <input
+                                type="text"
+                                value={extensionReason}
+                                onChange={(e) => setExtensionReason(e.target.value)}
+                                placeholder="Contoh: Menunggu approval dari tim klien..."
+                                className="w-full text-xs bg-background border border-border rounded-xl p-2 text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                              />
+                            </div>
+
+                            <Button
+                              type="button"
+                              variant="primary"
+                              size="sm"
+                              className="w-full text-xs h-8 mt-1 gap-1.5"
+                              onClick={handleApplyExtension}
+                              disabled={extendDeadline.isPending || (!extensionDays && !customExtensionDate)}
+                              isLoading={extendDeadline.isPending}
+                            >
+                              <CalendarPlus className="w-3.5 h-3.5" />
+                              <span>Terapkan Tambahan Waktu</span>
+                            </Button>
+                          </div>
+                        )}
+
+                        {/* Tab 3: Riwayat Perubahan Waktu */}
+                        {activeDateTab === 'history' && (
+                          <div className="space-y-2 pt-1 max-h-64 overflow-y-auto pr-1">
+                            {dateHistories.length === 0 ? (
+                              <div className="py-6 text-center text-muted text-xs space-y-1">
+                                <History className="w-6 h-6 mx-auto opacity-40 text-muted" />
+                                <p>Belum ada riwayat perubahan waktu.</p>
+                              </div>
+                            ) : (
+                              dateHistories.map((h) => {
+                                const userName = h.user?.name || 'User';
+                                const userAvatar = h.user?.avatar;
+                                const isExtension = h.type === 'deadline_extended';
+                                return (
+                                  <div
+                                    key={h.id}
+                                    className="p-2.5 bg-background border border-border rounded-xl text-xs space-y-1.5"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-1.5 truncate">
+                                        <Avatar name={userName} src={userAvatar} size="xs" />
+                                        <span className="font-semibold text-text truncate">{userName}</span>
+                                      </div>
+                                      <span className="text-[10px] text-muted shrink-0">
+                                        {new Date(h.created_at).toLocaleDateString(undefined, {
+                                          month: 'short',
+                                          day: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                        })}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      {isExtension && (
+                                        <span className="text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 px-1.5 py-0.2 rounded">
+                                          +{h.extension_days || 0} Hari Tambahan
+                                        </span>
+                                      )}
+                                      {h.type === 'start_date_changed' && (
+                                        <span className="text-[10px] font-bold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 px-1.5 py-0.2 rounded">
+                                          Waktu Mulai Diubah
+                                        </span>
+                                      )}
+                                      {h.type === 'due_date_changed' && (
+                                        <span className="text-[10px] font-bold bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 px-1.5 py-0.2 rounded">
+                                          Deadline Diubah
+                                        </span>
+                                      )}
+                                      {h.type === 'dates_set' && (
+                                        <span className="text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded">
+                                          Tanggal Ditetapkan
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {(h.old_due_date || h.new_due_date) && (
+                                      <div className="flex items-center gap-1.5 text-[11px] text-muted">
+                                        <span>{h.old_due_date ? new Date(h.old_due_date).toLocaleDateString() : '—'}</span>
+                                        <ArrowRight className="w-3 h-3 text-muted shrink-0" />
+                                        <span className="font-semibold text-text">
+                                          {h.new_due_date ? new Date(h.new_due_date).toLocaleDateString() : '—'}
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    {h.reason && (
+                                      <p className="text-[11px] text-text/85 bg-surface border border-border/70 rounded-lg p-1.5 italic">
+                                        &ldquo;{h.reason}&rdquo;
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
@@ -1231,10 +1632,23 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     <span className="text-[10px] uppercase font-semibold text-muted block mb-1">Status</span>
                     <span className="font-semibold text-text">{currentStatus?.name || '—'}</span>
                   </div>
+                  {taskData?.start_date && (
+                    <div>
+                      <span className="text-[10px] uppercase font-semibold text-muted block mb-1">Waktu Mulai</span>
+                      <span className="font-medium text-text">{new Date(taskData.start_date).toLocaleDateString()}</span>
+                    </div>
+                  )}
                   {taskData?.due_date && (
                     <div>
-                      <span className="text-[10px] uppercase font-semibold text-muted block mb-1">Due Date</span>
-                      <span className="font-medium text-text">{new Date(taskData.due_date).toLocaleDateString()}</span>
+                      <span className="text-[10px] uppercase font-semibold text-muted block mb-1">Batas Akhir / Deadline</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-medium text-text">{new Date(taskData.due_date).toLocaleDateString()}</span>
+                        {totalExtensions > 0 && (
+                          <span className="text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 px-1.5 py-0.2 rounded-full">
+                            +{totalExtensionDays}h ({totalExtensions}x)
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

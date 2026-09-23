@@ -139,6 +139,14 @@ class Task extends Model
     }
 
     /**
+     * Get the date and deadline change histories.
+     */
+    public function dateHistories(): HasMany
+    {
+        return $this->hasMany(TaskDateHistory::class)->with('user:id,name,email,avatar')->latest();
+    }
+
+    /**
      * Check if the task is overdue.
      */
     public function getIsOverdueAttribute(): bool

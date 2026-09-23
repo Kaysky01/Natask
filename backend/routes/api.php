@@ -99,6 +99,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('{task}', [TaskController::class, 'show']);
         Route::put('{task}', [TaskController::class, 'update']);
         Route::delete('{task}', [TaskController::class, 'destroy']);
+        Route::post('{task}/extend-deadline', [TaskController::class, 'extendDeadline']);
         
         // Task assignments
         Route::post('{task}/assign', [TaskController::class, 'assign']);
